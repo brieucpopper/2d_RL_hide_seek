@@ -15,7 +15,14 @@ import time
 
 
 NUM_POSSIBLE_THINGS = 5
+# This is for one-hot encoding, the 5 possible things are: wall, air, self, predator, prey
+# actions : 0,1,2,3,4
 
+WALL = 0
+AIR = 1
+SELF_ = 2
+PREDATOR = 3
+PREY = 4
 
 class PettingZooGridWorld(AECEnv):
     def __init__(self,grid_size,max_steps=1000):
@@ -24,12 +31,12 @@ class PettingZooGridWorld(AECEnv):
         self.GRID_SIZE=grid_size
         
         # Initialize grid
-        self.grid = [[' ' for _ in range(self.GRID_SIZE)] for _ in range(self.GRID_SIZE)]
+        self.grid = [[AIR for _ in range(self.GRID_SIZE)] for _ in range(self.GRID_SIZE)]
         
         # Add walls
         for _ in range(self.GRID_SIZE // 2):
             x, y = random.randint(0, self.GRID_SIZE-1), random.randint(0, self.GRID_SIZE-1)
-            self.grid[y][x] = '#'
+            self.grid[y][x] = WALL
         
         # Add agents
         self.agents = ['prey_1', 'prey_2', 'pred_1', 'pred_2']
@@ -40,25 +47,30 @@ class PettingZooGridWorld(AECEnv):
             'pred_2': (random.randint(0, self.GRID_SIZE-1), random.randint(0, self.GRID_SIZE-1)),
         }
 
+        #enter agent in the grid
+        for agent, pos in self.agent_positions.items():
+            x, y = pos
+            if agent.startswith('pred'):
+                self.grid[y][x] = PREDATOR
+            else:
+                self.grid[y][x] = PREY
 
-        
+
         self.action_spaces = {agent: Discrete(5) for agent in self.agents}
-        self.observation_spaces = {agent: Discrete(2*NUM_POSSIBLE_THINGS*self.GRID_SIZE*self.GRID_SIZE) for agent in self.agents}
+        self.observation_spaces = {agent: Discrete(NUM_POSSIBLE_THINGS*self.GRID_SIZE*self.GRID_SIZE) for agent in self.agents}
+        #we consider that if an agent receives an observation, it is its turn to play
         
         self.agent_order = self.agents[:]
         #print(f"agent_order: {self.agent_order}")
         self.agent_selector = agent_selector(self.agent_order)
         
         self.render_window = None
+
+        self.num_steps = 0
         
     def step(self, actions):
         self.num_steps += 1
-        
-        #print(f"agent: {agent}")
-        
-        
-
-        #move pred according to actions
+        #move predators according to actions
 
         for pred in actions.keys():
 
@@ -83,12 +95,11 @@ class PettingZooGridWorld(AECEnv):
                 dx = dx*2
                 dy = dy*2
 
+            #clip within the grid
             new_x, new_y = max(0, min(self.GRID_SIZE-1, x + dx)), max(0, min(self.GRID_SIZE-1, y + dy))
-            if self.grid[new_y][new_x] != '#':
+            if self.grid[new_y][new_x] != WALL:
+                #update if the new position is not a wall
                 self.agent_positions[pred] = (new_x, new_y)
-
-        
-        
         # Render the environment
         #self.render()
         
@@ -105,7 +116,7 @@ class PettingZooGridWorld(AECEnv):
         
         for y in range(self.GRID_SIZE):
             for x in range(self.GRID_SIZE):
-                if self.grid[y][x] == '#':
+                if self.grid[y][x] == WALL:
                     pygame.draw.rect(self.render_window, (0, 0, 0), (x * 50, y * 50, 50, 50))
                 else:
                     pygame.draw.rect(self.render_window, (255, 255, 255), (x * 50, y * 50, 50, 50))
@@ -122,35 +133,15 @@ class PettingZooGridWorld(AECEnv):
     def get_observations(self):
         observations = {}
         for agent, pos in self.agent_positions.items():
-            #wall,air,self, predator (seeker), prey (hider) coded as 0,1,2,3,4
-            #a.k.a '#', ' ', '.', 's', 'h' when printed
+    
+            
 
-            isFleeing = 'pred' in agent
-            if isFleeing:
-                isFleeing=1
-            else:
-                isFleeing=0
-
-            grid = [0 for _ in range(self.GRID_SIZE*self.GRID_SIZE)]
-
-            for y in range(self.GRID_SIZE):
-                for x in range(self.GRID_SIZE):
-                    if (x, y) == pos:
-                        grid[y*self.GRID_SIZE+x] = 2
-                    elif self.grid[y][x] == '#':
-                        grid[y*self.GRID_SIZE+x] = 0
-                    
-                    
-                    elif (x, y) == self.agent_positions['prey_1'] or (x, y) == self.agent_positions['prey_2']:
-                        grid[y*self.GRID_SIZE+x] = 4
-                    elif (x, y) == self.agent_positions['pred_1'] or (x, y) == self.agent_positions['pred_2']:
-                        grid[y*self.GRID_SIZE+x] = 3
-                    
-                    else:
-                        grid[y*self.GRID_SIZE+x] = 1
-            agent_observation =  grid +[isFleeing]
-            #the grid is of size {len(agent_observation)}")
-            observations[agent] = agent_observation[:]
+            grid_copy = self.grid[:][:]
+            
+            #make SELF_ at the agent's position
+            x, y = pos
+            grid_copy[y][x] = SELF_
+            observations[agent] = grid_copy
 
         return observations
     
