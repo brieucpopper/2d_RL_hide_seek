@@ -43,6 +43,18 @@ class PettingZooGridWorld(AECEnv):
         
         num_walls = 5
         wall_positions = set()
+
+        #add walls all round the grid
+        for i in range(self.GRID_SIZE):
+            wall_positions.add((0,i))
+            wall_positions.add((i,0))
+            wall_positions.add((self.GRID_SIZE-1,i))
+            wall_positions.add((i,self.GRID_SIZE-1))
+            self.grid[WALL,0,i] = 1
+            self.grid[WALL,i,0] = 1
+            self.grid[WALL,self.GRID_SIZE-1,i] = 1
+            self.grid[WALL,i,self.GRID_SIZE-1] = 1
+
         if self.is_walls == False:
             num_walls = 0
         while len(wall_positions) < num_walls:
@@ -89,7 +101,7 @@ class PettingZooGridWorld(AECEnv):
             # Double movement for prey
             if "prey" in agent:
                 dx *= 1
-                dy *= 1 #TODO
+                dy *= 1 
             
             # Calculate new position with bounds checking
             new_x = max(0, min(self.GRID_SIZE-1, x + dx))
@@ -206,14 +218,16 @@ class PettingZooGridWorld(AECEnv):
                     pygame.draw.rect(self.render_window, COLORS['pred'], 
                                      (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE/2, self.CELL_SIZE))
                 if self.grid[PREY, y, x] == 1:
-                    pygame.draw.rect(self.render_window, COLORS['prey'], 
+                    #if its prey_1
+                    if (x,y) == self.agent_positions['prey_1']:
+                        pygame.draw.rect(self.render_window, COLORS['prey'], 
                                      (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE/2))
-                
-                
+                    # pygame.draw.rect(self.render_window, COLORS['prey'], 
+                    #                  (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE/2))
                 
         
         pygame.display.flip()
-
+        time.sleep(0.1)
         #input()
 
     def get_dones(self):
