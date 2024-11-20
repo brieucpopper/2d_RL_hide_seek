@@ -14,12 +14,11 @@ import time
 from typing import Dict, Tuple, List, Optional
 
 # Constants
-NUM_POSSIBLE_THINGS = 5
+NUM_POSSIBLE_THINGS = 4
 WALL = 0
-AIR = 1
-SELF = 2  # Changed from SELF_ to SELF for consistency
-PREDATOR = 3
-PREY = 4
+SELF = 1
+PREDATOR = 2
+PREY = 3
 
 class PettingZooGridWorld(AECEnv):
     def __init__(self, grid_size: int, max_steps: int = 200,walls = True):
@@ -30,19 +29,19 @@ class PettingZooGridWorld(AECEnv):
         
         # Initialize pygame attributes
         self.render_window: Optional[pygame.Surface] = None
-        self.CELL_SIZE = 50
+        self.CELL_SIZE = 100
         self.is_walls = walls
         
         # Initialize environment state
         self.reset()
     
     def _initialize_grid(self) -> None:
-        """Initialize the grid with walls and agents."""
-        self.grid = np.full((self.GRID_SIZE, self.GRID_SIZE), AIR,dtype=np.int8)
+        """Initialize the grid with walls and agents. Grid will be a 3D array of shape (NUM_THINGS ; GRID_SIZE ; GRID SIZE)"""
+        self.grid = np.zeros((NUM_POSSIBLE_THINGS, self.GRID_SIZE, self.GRID_SIZE), dtype=np.int8)
         
         # Add walls
         
-        num_walls = self.GRID_SIZE // 2
+        num_walls = 5
         wall_positions = set()
         if self.is_walls == False:
             num_walls = 0
@@ -50,7 +49,7 @@ class PettingZooGridWorld(AECEnv):
                 x, y = random.randint(0, self.GRID_SIZE-1), random.randint(0, self.GRID_SIZE-1)
                 if (x, y) not in wall_positions:
                     wall_positions.add((x, y))
-                    self.grid[y, x] = WALL
+                    self.grid[WALL,y, x] = 1
         
         # Initialize agents
         self.agents = ['prey_1', 'prey_2', 'pred_1', 'pred_2']
@@ -64,10 +63,17 @@ class PettingZooGridWorld(AECEnv):
                 if pos not in occupied_positions:
                     self.agent_positions[agent] = pos
                     occupied_positions.add(pos)
-                    self.grid[pos[1], pos[0]] = PREDATOR if 'pred' in agent else PREY
+                    if 'pred' in agent:	
+                        self.grid[PREDATOR, pos[1], pos[0]] = 1
+                    else:
+                        self.grid[PREY, pos[1], pos[0]] = 1
                     break
     
     def step(self, actions: Dict[str, int]) -> Tuple[Dict, Dict, Dict, Dict]:
+        #self.render()
+
+        #$print(f'actions for this step : {actions}')
+       
         """Execute one time step within the environment."""
         self.num_steps += 1
         old_positions = self.agent_positions.copy()
@@ -82,21 +88,35 @@ class PettingZooGridWorld(AECEnv):
             
             # Double movement for prey
             if "prey" in agent:
-                dx *= 2
-                dy *= 2
+                dx *= 1
+                dy *= 1 #TODO
             
             # Calculate new position with bounds checking
             new_x = max(0, min(self.GRID_SIZE-1, x + dx))
             new_y = max(0, min(self.GRID_SIZE-1, y + dy))
             
             # Only move if destination is not a wall
-            if self.grid[new_y, new_x] != WALL:
+            if self.grid[WALL, new_y, new_x] == 0:
                 self.agent_positions[agent] = (new_x, new_y)
-                self.grid[new_y, new_x] = PREDATOR if 'pred' in agent else PREY
+                
             else:
                 self.agent_positions[agent] = (x, y)
-                self.grid[y, x] = PREDATOR if 'pred' in agent else PREY
         
+        #update grid by ftaking out old positions
+        for agent, pos in old_positions.items():
+            x, y = pos
+            if 'pred' in agent:
+                self.grid[PREDATOR, y, x] = 0
+            else:
+                self.grid[PREY, y, x] = 0
+
+        #fill all new positions
+        for agent, pos in self.agent_positions.items():
+            x, y = pos
+            if 'pred' in agent:
+                self.grid[PREDATOR, y, x] = 1
+            else:
+                self.grid[PREY, y, x] = 1
         return self.get_observations(), self.get_rewards(), self.get_dones(), self.get_infos()
     
     def get_observations(self) -> Dict[str, np.ndarray]:
@@ -105,7 +125,7 @@ class PettingZooGridWorld(AECEnv):
         for agent, pos in self.agent_positions.items():
             obs = self.grid.copy()
             x, y = pos
-            obs[y, x] = SELF
+            obs[SELF, y, x] = 1
             observations[agent] = obs
         return observations
     
@@ -116,20 +136,17 @@ class PettingZooGridWorld(AECEnv):
         for pred in [a for a in self.agents if 'pred' in a]:
             pred_x, pred_y = self.agent_positions[pred]
             
-            # Calculate distances to all prey
-            distances = []
-            for prey in [a for a in self.agents if 'prey' in a]:
-                prey_x, prey_y = self.agent_positions[prey]
-                manhattan_dist = abs(pred_x - prey_x) + abs(pred_y - prey_y)
-                distances.append(manhattan_dist)
+            # Calculate distances to prey_1
+            prey_1_x, prey_1_y = self.agent_positions['prey_1']
+
+            #rewards is negative of sum of abs distances
+            if 'pred_1' in pred:
+                rewards['pred_1'] = -1 * (abs(pred_x - prey_1_x) + abs(pred_y - prey_1_y))/10
+                #rewards['pred_1'] = -pred_x
+            else:
+                rewards['pred_2'] = -1 * (abs(pred_x - prey_1_x) + abs(pred_y - prey_1_y))/10
+                #rewards['pred_2'] = pred_x
             
-            min_distance = min(distances)
-            rewards[pred] = 1.0 / (min_distance + 1)
-            
-            # # Bonus reward for catching prey
-            # if min_distance == 0:
-            #     rewards[pred] += 10.0
-        
         return rewards
     
     def reset(self) -> Dict[str, np.ndarray]:
@@ -143,8 +160,8 @@ class PettingZooGridWorld(AECEnv):
         self.observation_spaces = {
             agent: Box(
                 low=0,
-                high=NUM_POSSIBLE_THINGS-1,
-                shape=(self.GRID_SIZE, self.GRID_SIZE),
+                high=1,
+                shape=(NUM_POSSIBLE_THINGS,self.GRID_SIZE, self.GRID_SIZE),
                 dtype=np.int8
             ) for agent in self.agents
         }
@@ -164,32 +181,46 @@ class PettingZooGridWorld(AECEnv):
         
         # Colors
         COLORS = {
-            WALL: (0, 0, 0),      # Black
-            AIR: (255, 255, 255),  # White
-            PREDATOR: (255, 0, 0), # Red
-            PREY: (0, 0, 255)      # Blue
+            'wall': (0, 0, 0),      # Black
+            'air': (255, 255, 255),  # White
+            'pred': (255, 0, 0), # Red
+            'prey': (0, 0, 255)      # Blue
         }
         
-        self.render_window.fill(COLORS[AIR])
+        self.render_window.fill(COLORS['air'])
         
-        # Draw grid
+        # Draw gridlines
+        for i in range(self.GRID_SIZE):
+            pygame.draw.line(self.render_window, (0, 0, 0), (i * self.CELL_SIZE, 0), (i * self.CELL_SIZE, self.GRID_SIZE * self.CELL_SIZE))
+            pygame.draw.line(self.render_window, (0, 0, 0), (0, i * self.CELL_SIZE), (self.GRID_SIZE * self.CELL_SIZE, i * self.CELL_SIZE))
+        
+
+
+
         for y in range(self.GRID_SIZE):
             for x in range(self.GRID_SIZE):
-                cell_type = self.grid[y, x]
-                if cell_type in COLORS:
-                    pygame.draw.rect(
-                        self.render_window,
-                        COLORS[cell_type],
-                        (x * self.CELL_SIZE, y * self.CELL_SIZE, 
-                         self.CELL_SIZE, self.CELL_SIZE)
-                    )
+                if self.grid[WALL, y, x] == 1:
+                    pygame.draw.rect(self.render_window, COLORS['wall'], 
+                                     (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+                if self.grid[PREDATOR, y, x] == 1:
+                    pygame.draw.rect(self.render_window, COLORS['pred'], 
+                                     (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE/2, self.CELL_SIZE))
+                if self.grid[PREY, y, x] == 1:
+                    pygame.draw.rect(self.render_window, COLORS['prey'], 
+                                     (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE/2))
+                
+                
+                
         
         pygame.display.flip()
+
+        #input()
 
     def get_dones(self):
 
         if self.num_steps >= self.MAX_STEPS:
             self.num_steps = 0
+            #print('doneeee')
             return {agent: True for agent in self.agents}
         return {agent: False for agent in self.agents}
 
