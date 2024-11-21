@@ -54,9 +54,9 @@ class GridNet(nn.Module):
 
 class ImprovedDQNAgent:
     def __init__(self, observation_space, action_space, learning_rate=0.001, gamma=0.9, 
-                 epsilon=1.0, epsilon_decay=0.9995, epsilon_min=0.01, memory_size=50000, 
-                 batch_size=128, tau=0.005, double_q=True, device=None):
-        # Use GPU if available, otherwise use CPU
+                 epsilon=1.0, epsilon_decay=0.99992, epsilon_min=0.02, memory_size=100000, 
+                 batch_size=256, tau=0.003, double_q=True, device=None):
+        # Use GPU if available, otherwise use CPUnk
         self.device = device or (torch.cuda.is_available() and torch.device('cuda') or torch.device('cpu'))
         
         self.observation_space = observation_space
@@ -130,10 +130,10 @@ class ImprovedDQNAgent:
         states, actions, rewards, next_states, dones = zip(*batch)
         
         # Prepare batch tensors
-        states = torch.FloatTensor(states).to(self.device)
+        states = torch.FloatTensor(np.array(states)).to(self.device)
         actions = torch.LongTensor(actions).to(self.device)
         rewards = torch.FloatTensor(rewards).to(self.device)
-        next_states = torch.FloatTensor(next_states).to(self.device)
+        next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
         dones = torch.FloatTensor(dones).to(self.device)
         weights = torch.FloatTensor(weights).to(self.device)
         
@@ -332,9 +332,9 @@ from env_clean import PettingZooGridWorld
 env = PettingZooGridWorld(8, walls=False)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# pred_agents, prey_agents, rewards = train_improved_dqn(env, device=device)
+pred_agents, prey_agents, rewards = train_improved_dqn(env, device=device)
 
-# exit(1)
+exit(1)
 #-------------------------------------------------------------------------------------------------------------
 device = device or (torch.cuda.is_available() and torch.device('cuda') or torch.device('cpu'))
 
