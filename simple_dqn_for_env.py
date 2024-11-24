@@ -84,7 +84,7 @@ class DQNAgent:
         self.learning_rate = 0.0005
         self.GRID_SIZE = GRID_SIZE
         self.NUM_POSSIBLE_THINGS = NUM_POSSIBLE_THINGS
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = "mps"#torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.model = DQN(GRID_SIZE, NUM_POSSIBLE_THINGS, action_size).to(self.device)
         self.target_model = DQN(GRID_SIZE, NUM_POSSIBLE_THINGS, action_size).to(self.device)

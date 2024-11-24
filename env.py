@@ -117,7 +117,9 @@ class PettingZooGridWorld(AECEnv):
             else:
                 pygame.draw.rect(self.render_window, (0, 0, 255), (x * 50, y * 50, 50, 50))
         
-        pygame.display.flip()
+        #pygame.display.flip()
+        return pygame.surfarray.array3d(self.render_window)
+        pygame.image.save(self.render_window, "env.png")
     
     def get_observations(self):
         observations = {}
