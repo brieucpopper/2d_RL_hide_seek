@@ -4,19 +4,21 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 
+import parallel
+
 
 class Agent(nn.Module):
     def __init__(self, num_actions):
         super().__init__()
 
         self.network = nn.Sequential(
-            nn.Conv2d(2, 64, kernel_size=7, stride=1, padding=3),
+            nn.Conv2d(5, 32, kernel_size=7, stride=1, padding=3),
             nn.LeakyReLU(0.01),
-            nn.BatchNorm2d(64),
-            nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
-            nn.BatchNorm2d(64),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=5, stride=1, padding=2),
+            nn.BatchNorm2d(32),
             nn.GELU(),
-            nn.Conv2d(64, 16, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(16),
             nn.Flatten(),
         )
@@ -29,17 +31,17 @@ class Agent(nn.Module):
         return layer
 
     def get_value(self, x):
-        return self.critic(self.network(x[:,[1,3]] / 1.0))
+        return self.critic(self.network(x[:,:] / 1.0))
 
     def get_action_and_value(self, x, action=None):
-        hidden = self.network(x[:,[1,3]]/1.0)
+        hidden = self.network(x[:,:]/1.0)
         
         logits = self.actor(hidden)
         probs = Categorical(logits=logits)
         if action is None:
             action = probs.sample()
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
-
+    
 
 def batchify_obs(obs, device):
     """Converts PZ style observations to batch of torch arrays."""
@@ -79,13 +81,13 @@ if __name__ == "__main__":
     clip_coef = 0.1
     gamma = 0.99
     batch_size = 32
-
+    stack_size = 4
+    frame_size = (64, 64)
     max_cycles = 250
-    total_episodes = 450
+    total_episodes = 200
 
     """ ENV SETUP """
-    import parallel
-    env = parallel.parallel_env(render_mode=None,grid_size=7)
+    env = parallel.parallel_env(grid_size=7)
 
     num_agents = len(env.possible_agents)
     num_actions = env.action_space(env.possible_agents[0]).n
@@ -93,13 +95,11 @@ if __name__ == "__main__":
 
     """ LEARNER SETUP """
     agent = Agent(num_actions=num_actions).to(device)
-    optimizer = optim.Adam(agent.parameters(), lr=0.0005, betas=(0.5, 0.998), eps=1e-5)
-
+    optimizer = optim.Adam(agent.parameters(), lr=0.001, eps=1e-5)
 
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
     total_episodic_return = 0
-    
     rb_obs = torch.zeros((max_cycles, num_agents, 5,7,7)).to(device)
     rb_actions = torch.zeros((max_cycles, num_agents)).to(device)
     rb_logprobs = torch.zeros((max_cycles, num_agents)).to(device)
@@ -109,17 +109,11 @@ if __name__ == "__main__":
 
     """ TRAINING LOGIC """
     # train for n number of episodes
-    ep_returns = []
     for episode in range(total_episodes):
         # collect an episode
         with torch.no_grad():
             # collect observations and convert to batch of torch tensors
             next_obs, info = env.reset(seed=None)
-
-            
-
-
-                
             # reset the episodic return
             total_episodic_return = 0
 
@@ -130,22 +124,13 @@ if __name__ == "__main__":
 
                 # get action from the agent
                 actions, logprobs, _, values = agent.get_action_and_value(obs)
+
                 
-                #make actions random except the first one
-                #actions is a tensor of size (num_agents,)
-                actions[1:] = torch.randint(0, num_actions, (num_agents-1,))
-                #print(actions)
-                
-                randommm = False
-                if np.random.rand() < 0.00001:
-                    randommm = True
-                    print(f'obs: {obs}')
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env)
                 )
-                if randommm:
-                    print(f'nex_obs: {next_obs}')
+
                 # add to episode storage
                 rb_obs[step] = obs
                 rb_rewards[step] = batchify(rewards, device)
@@ -185,7 +170,7 @@ if __name__ == "__main__":
         # Optimizing the policy and value network
         b_index = np.arange(len(b_obs))
         clip_fracs = []
-        for repeat in range(5):
+        for repeat in range(3):
             # shuffle the indices we use to access the data
             np.random.shuffle(b_index)
             for start in range(0, len(b_obs), batch_size):
@@ -235,54 +220,28 @@ if __name__ == "__main__":
                 entropy_loss = entropy.mean()
                 loss = pg_loss - ent_coef * entropy_loss + v_loss * vf_coef
 
-                #if episode more than 200, ent_coef can take value 0.1
-                if episode > 200:
-                    ent_coef = 0.2
-                
-                if episode > 300:
-                    ent_coef = 0.1
-
                 optimizer.zero_grad()
                 loss.backward()
-                #clip gradient 
-                #torch.nn.utils.clip_grad_norm_(agent.parameters(), max_norm=0.5)
                 optimizer.step()
 
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-        
-        ep_returns.append(total_episodic_return)
-        #print(ep_returns)
-
-        #if last ep return is more than -18 AND mean on last 10 is more than -18, save
-        if np.mean(ep_returns[-1]) > 4444 and np.mean(ep_returns[-10:]) > 4444:
-            torch.save(agent.state_dict(), "agent.pth")
-            print("Saved agent")
-            raise
-        if episode % 5 == 0:
-            print(f"Training episode {episode}")
-            print(f"Episodic Return: {np.mean(total_episodic_return)}")
-            
-            #print mean of last 50 episodes
-            if episode > 50:
-                print(f"Mean of last 50 episodes: {np.mean(ep_returns[-50:])}")
-
-            
-            print(f"Episode Length: {end_step}")
-            print("")
-            print(f"Value Loss: {v_loss.item()}")
-            print(f"Policy Loss: {pg_loss.item()}")
-            print(f"Old Approx KL: {old_approx_kl.item()}")
-            print(f"Approx KL: {approx_kl.item()}")
-            print(f"Clip Fraction: {np.mean(clip_fracs)}")
-            print(f"Explained Variance: {explained_var.item()}")
-            print("\n-------------------------------------------\n")
+        print(f"Training episode {episode}")
+        print(f"Episodic Return: {np.mean(total_episodic_return)}")
+        print(f"Episode Length: {end_step}")
+        print("")
+        print(f"Value Loss: {v_loss.item()}")
+        print(f"Policy Loss: {pg_loss.item()}")
+        print(f"Old Approx KL: {old_approx_kl.item()}")
+        print(f"Approx KL: {approx_kl.item()}")
+        print(f"Clip Fraction: {np.mean(clip_fracs)}")
+        print(f"Explained Variance: {explained_var.item()}")
+        print("\n-------------------------------------------\n")
 
     """ RENDER THE POLICY """
 
-    import parallel
     env = parallel.parallel_env(render_mode="human",grid_size=7)
 
     agent.eval()

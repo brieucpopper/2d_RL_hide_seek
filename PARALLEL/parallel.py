@@ -307,14 +307,14 @@ class parallel_env(ParallelEnv):
 
 
 
-from pettingzoo.test import parallel_api_test
-env = parallel_env(render_mode='human',grid_size=7)
+# from pettingzoo.test import parallel_api_test
+# env = parallel_env(render_mode='human',grid_size=7)
 
-observations, infos = env.reset()
+# observations, infos = env.reset()
 
-while env.agents:
-    # this is where you would insert your policy
-    actions = {agent: env.action_space(agent).sample() for agent in env.agents}
+# while env.agents:
+#     # this is where you would insert your policy
+#     actions = {agent: env.action_space(agent).sample() for agent in env.agents}
 
-    observations, rewards, terminations, truncations, infos = env.step(actions)
-env.close()
+#     observations, rewards, terminations, truncations, infos = env.step(actions)
+# env.close()
