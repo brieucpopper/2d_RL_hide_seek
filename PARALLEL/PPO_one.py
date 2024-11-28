@@ -52,8 +52,6 @@ def batchify_obs(obs, device):
     """Converts PZ style observations to batch of torch arrays."""
     # convert to list of np arrays
     obs = np.stack([obs[a] for a in obs], axis=0)
-    # transpose to be (batch, channel, height, width)
-    #obs = obs.transpose(0, -1, 1, 2)
     # convert to torch
     obs = torch.tensor(obs).to(device)
 
@@ -127,10 +125,23 @@ if __name__ == "__main__":
                 # rollover the observation
                 obs = batchify_obs(next_obs, device)
 
-                # get action from the agent
-                actions, logprobs, _, values = agent.get_action_and_value(obs)
+                # get action for first agent from the trained agent
+                # get random actions for other agents
+                actions = torch.zeros(num_agents, dtype=torch.long).to(device)
+                logprobs = torch.zeros(num_agents).to(device)
+                values = torch.zeros(num_agents).to(device)
 
-                
+                # First agent uses policy network
+                first_agent = env.possible_agents[0]
+                first_agent_obs = obs[0].unsqueeze(0)
+                actions[0], logprobs[0], _, values[0] = agent.get_action_and_value(first_agent_obs)
+
+                # Other agents use random policy
+                for i in range(1, num_agents):
+                    actions[i] = torch.randint(0, num_actions, (1,)).to(device)
+                    logprobs[i] = torch.log(torch.tensor(1.0/num_actions))
+                    values[i] = 0.0  # No value estimation for random agents
+
                 # execute the environment and log data
                 next_obs, rewards, terms, truncs, infos = env.step(
                     unbatchify(actions, env)
@@ -142,7 +153,7 @@ if __name__ == "__main__":
                 rb_terms[step] = batchify(terms, device)
                 rb_actions[step] = actions
                 rb_logprobs[step] = logprobs
-                rb_values[step] = values.flatten()
+                rb_values[step] = values
 
                 # compute episodic return
                 total_episodic_return += rb_rewards[step].cpu().numpy()
@@ -152,25 +163,25 @@ if __name__ == "__main__":
                     end_step = step
                     break
 
-        # bootstrap value if not done
+        # Bootstrap value and advantages only for the first agent
         with torch.no_grad():
             rb_advantages = torch.zeros_like(rb_rewards).to(device)
             for t in reversed(range(end_step)):
                 delta = (
-                    rb_rewards[t]
-                    + gamma * rb_values[t + 1] * rb_terms[t + 1]
-                    - rb_values[t]
+                    rb_rewards[t, 0]  # Only first agent's reward
+                    + gamma * rb_values[t + 1, 0] * rb_terms[t + 1, 0]
+                    - rb_values[t, 0]
                 )
-                rb_advantages[t] = delta + gamma * gamma * rb_advantages[t + 1]
+                rb_advantages[t, 0] = delta + gamma * gamma * rb_advantages[t + 1, 0]
             rb_returns = rb_advantages + rb_values
 
-        # convert our episodes to batch of individual transitions
-        b_obs = torch.flatten(rb_obs[:end_step], start_dim=0, end_dim=1)
-        b_logprobs = torch.flatten(rb_logprobs[:end_step], start_dim=0, end_dim=1)
-        b_actions = torch.flatten(rb_actions[:end_step], start_dim=0, end_dim=1)
-        b_returns = torch.flatten(rb_returns[:end_step], start_dim=0, end_dim=1)
-        b_values = torch.flatten(rb_values[:end_step], start_dim=0, end_dim=1)
-        b_advantages = torch.flatten(rb_advantages[:end_step], start_dim=0, end_dim=1)
+        # convert our episodes to batch of individual transitions (only for first agent)
+        b_obs = rb_obs[:end_step, 0]
+        b_logprobs = rb_logprobs[:end_step, 0]
+        b_actions = rb_actions[:end_step, 0]
+        b_returns = rb_returns[:end_step, 0]
+        b_values = rb_values[:end_step, 0]
+        b_advantages = rb_advantages[:end_step, 0]
 
         # Optimizing the policy and value network
         b_index = np.arange(len(b_obs))
@@ -197,7 +208,7 @@ if __name__ == "__main__":
                         ((ratio - 1.0).abs() > clip_coef).float().mean().item()
                     ]
 
-                # normalize advantaegs
+                # normalize advantages
                 advantages = b_advantages[batch_index]
                 advantages = (advantages - advantages.mean()) / (
                     advantages.std() + 1e-8
@@ -259,9 +270,15 @@ if __name__ == "__main__":
             terms = [False]
             truncs = [False]
             while not any(terms) and not any(truncs):
-                actions, logprobs, _, values = agent.get_action_and_value(obs)
-                actions[1:] = torch.randint(0, num_actions, (num_agents-1,))
-                obs, rewards, terms, truncs, infos = env.step(unbatchify(actions, env))
+                # First agent uses trained policy
+                first_agent_obs = obs[0].unsqueeze(0)
+                actions, logprobs, _, values = agent.get_action_and_value(first_agent_obs)
+                
+                # Other agents use random actions
+                other_actions = torch.randint(0, num_actions, (num_agents-1,))
+                full_actions = torch.cat([actions, other_actions])
+                
+                obs, rewards, terms, truncs, infos = env.step(unbatchify(full_actions, env))
                 obs = batchify_obs(obs, device)
                 terms = [terms[a] for a in terms]
                 truncs = [truncs[a] for a in truncs]

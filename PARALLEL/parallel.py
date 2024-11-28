@@ -213,7 +213,7 @@ class parallel_env(ParallelEnv):
     
         for agent in self.agents:
             if agent.startswith("pred_1"):
-                rewards[agent] = p1x
+                rewards[agent] = p1x +p1y
                 #rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
             elif agent.startswith("pred_2"):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]
