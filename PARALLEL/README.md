@@ -10,18 +10,16 @@ you can change the grid_size
 you can observe the play with 
 
 
-***
+```
 env = parallel_env(render_mode='human',grid_size=7)
 
  observations, infos = env.reset()
-
  while env.agents:
  this is where you would insert your policy
      actions = {agent: env.action_space(agent).sample() for agent in env.agents}
-
      observations, rewards, terminations, truncations, infos = env.step(actions)
  env.close()
-***
+```
 
 Make sure the reward is setup as you want !
 
@@ -46,3 +44,36 @@ You can specify if each agent should be
 Load policies, or random agents.
 
 you can watch the policies rendered with pygame, and get stats printed to terminal (like average rewards)
+
+## movable_wall_parallel.py
+
+
+same as parallel but with an added movable wall !
+
+```
+def input_to_action(input):
+    if input == 'd':
+        return 1 #right
+    elif input == 'a':
+        return 2 #left
+    elif input == 's': 
+        return 3 # down
+    elif input == 'w':
+        return 4 # up
+    else:
+        return 0
+
+env = parallel_env(render_mode='human',grid_size=8,walls=True)
+
+observations, infos = env.reset()
+
+while env.agents:
+    # this is where you would insert your policy
+    actions = {agent: env.action_space(agent).sample() for agent in env.agents}
+    actions['pred_1'] = input_to_action(input("enter pred_1 move (w a s d) then enter : \n"))
+    observations, rewards, terminations, truncations, infos = env.step(actions)
+    
+env.close()
+```
+
+You can play as pred_1 with the above code which helps test out the wall @!
