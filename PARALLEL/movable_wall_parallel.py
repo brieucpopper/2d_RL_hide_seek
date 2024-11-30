@@ -129,28 +129,31 @@ class parallel_env(ParallelEnv):
                 pygame.draw.line(self.render_window, (0, 0, 0), (0, i * self.CELL_SIZE), (self.grid_size * self.CELL_SIZE, i * self.CELL_SIZE))
             
 
-
+            
 
             for y in range(self.grid_size):
                 for x in range(self.grid_size):
-                    if self.grid[WALL, y, x] == 1:
-                        pygame.draw.rect(self.render_window, COLORS['wall'], 
-                                        (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+            
                         
                     if self.grid[PRED_1, y, x] == 1:
-                        pygame.draw.rect(self.render_window, COLORS['pred_1'], 
-                                        (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+                        #blit ./PARALLEL/sprites/pred_1.png
+                        sprite = pygame.image.load('./PARALLEL/sprites/pred_1.png')
+                        self.render_window.blit(sprite, (x * self.CELL_SIZE+20, y * self.CELL_SIZE+50))
+
                         
                     if self.grid[PRED_2, y, x] == 1:
-                        pygame.draw.rect(self.render_window, COLORS['pred_2'], 
-                                        (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+                        #blit ./PARALLEL/sprites/pred_2.png
+                        sprite = pygame.image.load('./PARALLEL/sprites/pred_2.png')
+                        self.render_window.blit(sprite, (x * self.CELL_SIZE+20, y * self.CELL_SIZE+20))
                     if self.grid[HIDER_1, y, x] == 1:
-                        pygame.draw.rect(self.render_window, COLORS['hider_1'], 
-                                        (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+                        #blit ./PARALLEL/sprites/hider_1.png
+                        sprite = pygame.image.load('./PARALLEL/sprites/hider_1.png')
+                        self.render_window.blit(sprite, (x * self.CELL_SIZE+50, y * self.CELL_SIZE+50))
                         
                     if self.grid[HIDER_2, y, x] == 1:
-                        pygame.draw.rect(self.render_window, COLORS['hider_2'], 
-                                        (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+                        #blit ./PARALLEL/sprites/hider_2.png
+                        sprite = pygame.image.load('./PARALLEL/sprites/hider_2.png')
+                        self.render_window.blit(sprite, (x * self.CELL_SIZE+50, y * self.CELL_SIZE+20))
                         
                     if self.grid[WALL, y, x] == 1:
                         pygame.draw.rect(self.render_window, COLORS['wall'], 
@@ -161,23 +164,23 @@ class parallel_env(ParallelEnv):
                                         (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
 
                     ######################### BLIT TEXT SO ITS EASY IF THERE IS OVERLAP #$$$$$$$$$$$$$$$$$$$$$$
-                    font = pygame.font.Font(None, 24)
+                    font = pygame.font.Font(None, 14)
                     if self.grid[PRED_1, y, x] == 1:
                         
-                        text = font.render("PRED_1", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 0))
+                        text = font.render("P1", True, (0, 0, 0))
+                        self.render_window.blit(text, (x * self.CELL_SIZE+30, y * self.CELL_SIZE + 80))
 
                     if self.grid[PRED_2, y, x] == 1:
-                        text = font.render("PRED_2", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 20))
+                        text = font.render("P2", True, (0, 0, 0))
+                        self.render_window.blit(text, (x * self.CELL_SIZE+ 30, y * self.CELL_SIZE + 10))
                     if self.grid[HIDER_1, y, x] == 1:
-                        text = font.render("HIDER_1", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 38))
+                        text = font.render("H1", True, (0, 0, 0))
+                        self.render_window.blit(text, (x * self.CELL_SIZE+ 60, y * self.CELL_SIZE + 80))
                     if self.grid[HIDER_2, y, x] == 1:
-                        text = font.render("HIDER_2", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 57))
+                        text = font.render("H2", True, (0, 0, 0))
+                        self.render_window.blit(text, (x * self.CELL_SIZE+ 60, y * self.CELL_SIZE + 10))
                     if self.grid[MOVABLE_WALL, y, x] == 1:
-                        text = font.render("MO_WALL", True, (0, 0, 0))
+                        text = font.render("WALL", True, (0, 0, 0))
                         self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 70))
                     
             
@@ -385,30 +388,30 @@ class parallel_env(ParallelEnv):
 
 
 
-# def input_to_action(input):
-#     if input == 'd':
-#         return 1 #right
-#     elif input == 'a':
-#         return 2 #left
-#     elif input == 's': 
-#         return 3 # down
-#     elif input == 'w':
-#         return 4 # up
-#     else:
-#         return 0
+def input_to_action(input):
+    if input == 'd':
+        return 1 #right
+    elif input == 'a':
+        return 2 #left
+    elif input == 's': 
+        return 3 # down
+    elif input == 'w':
+        return 4 # up
+    else:
+        return 0
     
-# # from pettingzoo.test import parallel_api_test
-# env = parallel_env(render_mode='human',grid_size=8,walls=True)
+# from pettingzoo.test import parallel_api_test
+env = parallel_env(render_mode='human',grid_size=8,walls=True)
 
-# observations, infos = env.reset()
+observations, infos = env.reset()
 
-# while env.agents:
-#     # this is where you would insert your policy
-#     actions = {agent: env.action_space(agent).sample() for agent in env.agents}
-#     actions['pred_1'] = input_to_action(input("enter pred_1 move (w a s d) then enter : \n"))
+while env.agents:
+    # this is where you would insert your policy
+    actions = {agent: env.action_space(agent).sample() for agent in env.agents}
+    actions['pred_1'] = input_to_action(input("enter pred_1 move (W/A/S/D) then enter : \n"))
     
      
 
-#     observations, rewards, terminations, truncations, infos = env.step(actions)
+    observations, rewards, terminations, truncations, infos = env.step(actions)
     
-# env.close()
+env.close()
