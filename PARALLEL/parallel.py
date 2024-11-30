@@ -113,8 +113,8 @@ class parallel_env(ParallelEnv):
                 'air': (255, 255, 255),  # White
                 'pred_1': (255, 60, 0),    
                 'pred_2': (255, 0, 60), 
-                'hider_1': (30, 0, 255),   
-                'hider_2': (0, 60, 200) 
+                'hider_1': (120, 0, 255),   
+                'hider_2': (0, 120, 200) 
             }
             
             self.render_window.fill(COLORS['air'])
@@ -136,22 +136,40 @@ class parallel_env(ParallelEnv):
                     if self.grid[PRED_1, y, x] == 1:
                         pygame.draw.rect(self.render_window, COLORS['pred_1'], 
                                         (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
-                        #blit text "pred_1" on the cell
-                        font = pygame.font.Font(None, 36)
-                        text = font.render("pred_1", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE))
+                        
                     if self.grid[PRED_2, y, x] == 1:
                         pygame.draw.rect(self.render_window, COLORS['pred_2'], 
                                         (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
                     if self.grid[HIDER_1, y, x] == 1:
                         pygame.draw.rect(self.render_window, COLORS['hider_1'], 
                                         (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
-                        font = pygame.font.Font(None, 36)
-                        text = font.render("hider_1", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE))
+                        
                     if self.grid[HIDER_2, y, x] == 1:
                         pygame.draw.rect(self.render_window, COLORS['hider_2'], 
                                         (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+                        
+                    if self.grid[WALL, y, x] == 1:
+                        pygame.draw.rect(self.render_window, COLORS['wall'], 
+                                        (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+                        
+
+                    ######################### BLIT TEXT SO ITS EASY IF THERE IS OVERLAP #$$$$$$$$$$$$$$$$$$$$$$
+                    font = pygame.font.Font(None, 28)
+                    if self.grid[PRED_1, y, x] == 1:
+                        
+                        text = font.render("PRED_1", True, (0, 0, 0))
+                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 0))
+
+                    if self.grid[PRED_2, y, x] == 1:
+                        text = font.render("PRED_2", True, (0, 0, 0))
+                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 20))
+                    if self.grid[HIDER_1, y, x] == 1:
+                        text = font.render("HIDER_1", True, (0, 0, 0))
+                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 40))
+                    if self.grid[HIDER_2, y, x] == 1:
+                        text = font.render("HIDER_2", True, (0, 0, 0))
+                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 60))
+                    
             
             pygame.display.flip()
             input()
@@ -186,6 +204,13 @@ class parallel_env(ParallelEnv):
             grid[WALL,edge_idx,grid_size-1] = 1
             grid[WALL,0,edge_idx] = 1
             grid[WALL,grid_size-1,edge_idx] = 1
+
+        WANTWALLS = False
+        #place 4 walls randomly
+        if WANTWALLS:
+            for _ in range(4):
+                grid[WALL,random.randint(1,grid_size-2),random.randint(1,grid_size-2)] = 1
+        
         
 
         self.infos["pred_1"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
@@ -210,16 +235,25 @@ class parallel_env(ParallelEnv):
         hider2x = self.infos["hider_2"]["coords"][0]
         hider2y = self.infos["hider_2"]["coords"][1]
 
+        p2x = self.infos["pred_2"]["coords"][0]
+
+        hider2x = self.infos["hider_2"]["coords"][0]
+        hider2y = self.infos["hider_2"]["coords"][1]
+
     
         for agent in self.agents:
             if agent.startswith("pred_1"):
-                rewards[agent] = p1x +p1y
-                #rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
+                
+                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
+                rewards[agent] = p1x + p1y
             elif agent.startswith("pred_2"):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]
-                rewards[agent] = 0
+                rewards[agent] = p2x
+            elif agent.startswith("hider_1"):
+                rewards[agent] = (np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
+                rewards[agent] = -target_x
             else:
-                rewards[agent] = 0
+                rewards[agent] = - hider2x - hider2y
         #$print(rewards)
         return rewards
     
