@@ -185,6 +185,13 @@ class parallel_env(ParallelEnv):
                     
             
             pygame.display.flip()
+
+            #save current frame to ALL_PYGAME_FRAMES
+            global ALL_PYGAME_FRAMES
+            if ALL_PYGAME_FRAMES is None:
+                ALL_PYGAME_FRAMES = []
+            ALL_PYGAME_FRAMES.append(pygame.surfarray.array3d(self.render_window))
+
             #input()
             #print rewards
             print(self.compute_rewards_all_agents())
@@ -385,7 +392,7 @@ class parallel_env(ParallelEnv):
 
         return observations, rewards, terminations, truncations, infos
 
-
+ALL_PYGAME_FRAMES = None
 
 
 def input_to_action(input):
@@ -414,4 +421,9 @@ while env.agents:
 
     observations, rewards, terminations, truncations, infos = env.step(actions)
     
+    if len(ALL_PYGAME_FRAMES) > 60:
+        #generate gif at 5 fps at ./random.gif, transpose first
+        import imageio
+        imageio.mimsave('./random.gif', [np.transpose(frame, (1, 0, 2)) for frame in ALL_PYGAME_FRAMES], fps=5)
+        break
 env.close()
