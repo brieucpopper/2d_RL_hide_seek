@@ -56,7 +56,7 @@ def raw_env(render_mode=None):
 class parallel_env(ParallelEnv):
     metadata = {"render_modes": ["human"], "name": "2dhs"}
 
-    def __init__(self, render_mode=None,grid_size=6,walls=False):
+    def __init__(self, render_mode=None,grid_size=6,walls=False,generate_gif=False):
         """
         The init method takes in environment arguments and should define the following attributes:
         - possible_agents
@@ -77,6 +77,9 @@ class parallel_env(ParallelEnv):
         self.render_mode = render_mode
         self.CELL_SIZE = 90
         self.walls = walls #true or false
+        self.generate_gif = generate_gif
+        self.gif_frames = []
+        self.IS_SCREEN = False
 
     # Observation space should be defined here.
     # lru_cache allows observation and action spaces to be memoized, reducing clock cycles required to get each agent's space.
@@ -94,107 +97,119 @@ class parallel_env(ParallelEnv):
     
     def render(self):
         """
-        Renders the environment. In human mode, it can print to terminal, open
-        up a graphical window, or open up some other display that a human can see and understand.
+        Renders the environment. In human mode, it renders to a pygame surface.
+        Optionally opens a graphical window if IS_SCREEN is True.
         """
         if self.render_mode is None:
             gymnasium.logger.warn(
                 "You are calling render method without specifying any render mode."
             )
             return
-        
+
         if self.render_mode == "human":
+            import pygame
+            import numpy as np
+            import imageio
+
             pygame.init()
-            self.render_window = pygame.display.set_mode((self.grid_size * self.CELL_SIZE, 
-                                                        self.grid_size * self.CELL_SIZE))
-            pygame.display.set_caption('Petting Zoo Grid World')
-        
+
+            # Initialize rendering surface
+            if not hasattr(self, 'render_surface'):
+                self.render_surface = pygame.Surface(
+                    (self.grid_size * self.CELL_SIZE, self.grid_size * self.CELL_SIZE)
+                )
+
             # Colors
             COLORS = {
-                'wall': (0, 0, 0),      # Black
+                'wall': (0, 0, 0),        # Black
                 'air': (255, 255, 255),  # White
-                'pred_1': (255, 60, 0),    
-                'pred_2': (255, 0, 60), 
-                'hider_1': (120, 0, 255),   
-                'hider_2': (0, 120, 200), 
-              
-                'movable_wall': (139,69,19)  #brown movable wall
+                'pred_1': (255, 60, 0),
+                'pred_2': (255, 0, 60),
+                'hider_1': (120, 0, 255),
+                'hider_2': (0, 120, 200),
+                'movable_wall': (139, 69, 19)  # Brown
             }
-            
-            self.render_window.fill(COLORS['air'])
-            
+
+            self.render_surface.fill(COLORS['air'])
+
             # Draw gridlines
             for i in range(self.grid_size):
-                pygame.draw.line(self.render_window, (0, 0, 0), (i * self.CELL_SIZE, 0), (i * self.CELL_SIZE, self.grid_size * self.CELL_SIZE))
-                pygame.draw.line(self.render_window, (0, 0, 0), (0, i * self.CELL_SIZE), (self.grid_size * self.CELL_SIZE, i * self.CELL_SIZE))
-            
+                pygame.draw.line(self.render_surface, (0, 0, 0), (i * self.CELL_SIZE, 0),
+                                (i * self.CELL_SIZE, self.grid_size * self.CELL_SIZE))
+                pygame.draw.line(self.render_surface, (0, 0, 0), (0, i * self.CELL_SIZE),
+                                (self.grid_size * self.CELL_SIZE, i * self.CELL_SIZE))
 
-            
-
+            # Draw objects on the grid
             for y in range(self.grid_size):
                 for x in range(self.grid_size):
-            
-                        
                     if self.grid[PRED_1, y, x] == 1:
-                        #blit ./PARALLEL/sprites/pred_1.png
                         sprite = pygame.image.load('./PARALLEL/sprites/pred_1.png')
-                        self.render_window.blit(sprite, (x * self.CELL_SIZE+20, y * self.CELL_SIZE+50))
+                        self.render_surface.blit(sprite, (x * self.CELL_SIZE + 20, y * self.CELL_SIZE + 50))
 
-                        
                     if self.grid[PRED_2, y, x] == 1:
-                        #blit ./PARALLEL/sprites/pred_2.png
                         sprite = pygame.image.load('./PARALLEL/sprites/pred_2.png')
-                        self.render_window.blit(sprite, (x * self.CELL_SIZE+20, y * self.CELL_SIZE+20))
+                        self.render_surface.blit(sprite, (x * self.CELL_SIZE + 20, y * self.CELL_SIZE + 20))
+
                     if self.grid[HIDER_1, y, x] == 1:
-                        #blit ./PARALLEL/sprites/hider_1.png
                         sprite = pygame.image.load('./PARALLEL/sprites/hider_1.png')
-                        self.render_window.blit(sprite, (x * self.CELL_SIZE+50, y * self.CELL_SIZE+50))
-                        
+                        self.render_surface.blit(sprite, (x * self.CELL_SIZE + 50, y * self.CELL_SIZE + 50))
+
                     if self.grid[HIDER_2, y, x] == 1:
-                        #blit ./PARALLEL/sprites/hider_2.png
                         sprite = pygame.image.load('./PARALLEL/sprites/hider_2.png')
-                        self.render_window.blit(sprite, (x * self.CELL_SIZE+50, y * self.CELL_SIZE+20))
-                        
+                        self.render_surface.blit(sprite, (x * self.CELL_SIZE + 50, y * self.CELL_SIZE + 20))
+
                     if self.grid[WALL, y, x] == 1:
-                        pygame.draw.rect(self.render_window, COLORS['wall'], 
-                                        (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
-                    
-                    if self.grid[MOVABLE_WALL, y, x] == 1:
-                        pygame.draw.rect(self.render_window, COLORS['movable_wall'],
+                        pygame.draw.rect(self.render_surface, COLORS['wall'],
                                         (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
 
-                    ######################### BLIT TEXT SO ITS EASY IF THERE IS OVERLAP #$$$$$$$$$$$$$$$$$$$$$$
+                    if self.grid[MOVABLE_WALL, y, x] == 1:
+                        pygame.draw.rect(self.render_surface, COLORS['movable_wall'],
+                                        (x * self.CELL_SIZE, y * self.CELL_SIZE, self.CELL_SIZE, self.CELL_SIZE))
+
+                    # Add text labels for debugging
                     font = pygame.font.Font(None, 14)
                     if self.grid[PRED_1, y, x] == 1:
-                        
                         text = font.render("P1", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE+30, y * self.CELL_SIZE + 80))
+                        self.render_surface.blit(text, (x * self.CELL_SIZE + 30, y * self.CELL_SIZE + 80))
 
                     if self.grid[PRED_2, y, x] == 1:
                         text = font.render("P2", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE+ 30, y * self.CELL_SIZE + 10))
+                        self.render_surface.blit(text, (x * self.CELL_SIZE + 30, y * self.CELL_SIZE + 10))
+
                     if self.grid[HIDER_1, y, x] == 1:
                         text = font.render("H1", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE+ 60, y * self.CELL_SIZE + 80))
+                        self.render_surface.blit(text, (x * self.CELL_SIZE + 60, y * self.CELL_SIZE + 80))
+
                     if self.grid[HIDER_2, y, x] == 1:
                         text = font.render("H2", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE+ 60, y * self.CELL_SIZE + 10))
+                        self.render_surface.blit(text, (x * self.CELL_SIZE + 60, y * self.CELL_SIZE + 10))
+
                     if self.grid[MOVABLE_WALL, y, x] == 1:
                         text = font.render("WALL", True, (0, 0, 0))
-                        self.render_window.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 70))
-                    
-            
-            pygame.display.flip()
+                        self.render_surface.blit(text, (x * self.CELL_SIZE, y * self.CELL_SIZE + 70))
 
-            #save current frame to ALL_PYGAME_FRAMES
-            global ALL_PYGAME_FRAMES
-            if ALL_PYGAME_FRAMES is None:
-                ALL_PYGAME_FRAMES = []
-            ALL_PYGAME_FRAMES.append(pygame.surfarray.array3d(self.render_window))
+            # Handle screen display or GIF generation
+            if self.IS_SCREEN:
+                if not hasattr(self, 'render_window'):
+                    self.render_window = pygame.display.set_mode(
+                        (self.grid_size * self.CELL_SIZE, self.grid_size * self.CELL_SIZE))
+                    pygame.display.set_caption('Petting Zoo Grid World')
 
-            #input()
-            #print rewards
-            print(self.compute_rewards_all_agents())
+                self.render_window.blit(self.render_surface, (0, 0))
+                pygame.display.flip()
+            elif self.generate_gif:
+                if not hasattr(self, 'gif_frames'):
+                    self.gif_frames = []
+
+                if len(self.gif_frames) < 120:
+                    frame = pygame.surfarray.array3d(self.render_surface)
+                    frame = np.transpose(frame, (1, 0, 2))  # Transpose for correct orientation
+                    self.gif_frames.append(frame)
+                else:
+                    imageio.mimsave('./random.gif', self.gif_frames, fps=5)
+                    print("Saved GIF!")
+                    exit(1)
+
 
     def close(self):
         pass
@@ -272,8 +287,8 @@ class parallel_env(ParallelEnv):
         for agent in self.agents:
             if agent.startswith("pred_1"):
                 
-                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
-                rewards[agent] = p1x + p1y
+                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)/100
+                #rewards[agent] = p1x + p1y
             elif agent.startswith("pred_2"):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]
                 rewards[agent] = p2x
@@ -394,36 +409,3 @@ class parallel_env(ParallelEnv):
 
 ALL_PYGAME_FRAMES = None
 
-
-def input_to_action(input):
-    if input == 'd':
-        return 1 #right
-    elif input == 'a':
-        return 2 #left
-    elif input == 's': 
-        return 3 # down
-    elif input == 'w':
-        return 4 # up
-    else:
-        return 0
-    
-# from pettingzoo.test import parallel_api_test
-env = parallel_env(render_mode='human',grid_size=8,walls=True)
-
-observations, infos = env.reset()
-
-while env.agents:
-    # this is where you would insert your policy
-    actions = {agent: env.action_space(agent).sample() for agent in env.agents}
-    actions['pred_1'] = input_to_action(input("enter pred_1 move (W/A/S/D) then enter : \n"))
-    
-     
-
-    observations, rewards, terminations, truncations, infos = env.step(actions)
-    
-    if len(ALL_PYGAME_FRAMES) > 60:
-        #generate gif at 5 fps at ./random.gif, transpose first
-        import imageio
-        imageio.mimsave('./random.gif', [np.transpose(frame, (1, 0, 2)) for frame in ALL_PYGAME_FRAMES], fps=5)
-        break
-env.close()

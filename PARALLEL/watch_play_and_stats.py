@@ -29,7 +29,7 @@ from torch.distributions import Categorical
 
 
 policies = [
-    '/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_pred1_movablewall.pth',
+    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/PARALLEL/best_pred1_nowalls_6x8x8.pth',
     None,
     None,
     None]
@@ -40,7 +40,7 @@ policies = [
 GRID_SIZE = 8
 NUM_THINGS = 6
 
-env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,render_mode="human",walls=False)
+env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,render_mode="human",walls=False,generate_gif=False)
 
 class Agent(nn.Module):
     def __init__(self, num_actions):
