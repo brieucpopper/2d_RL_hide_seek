@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 
-import parallel
 
+import movable_wall_parallel
 
 import torch
 import torch.nn as nn
@@ -29,7 +29,7 @@ from torch.distributions import Categorical
 
 
 policies = [
-    '/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_model_pred1.pth',
+    '/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_pred1_movablewall.pth',
     None,
     None,
     None]
@@ -37,7 +37,10 @@ policies = [
 
 #either None : random ; or a path
 
-GRID_SIZE = 6
+GRID_SIZE = 8
+NUM_THINGS = 6
+
+env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,render_mode="human",walls=False)
 
 class Agent(nn.Module):
     def __init__(self, num_actions):
@@ -45,7 +48,7 @@ class Agent(nn.Module):
 
         # CNN architecture inspired by DQN for Atari
         self.network = nn.Sequential(
-            nn.Conv2d(5, 32, kernel_size=3, stride=1, padding=1),  # Output: 32 x 7 x 7
+            nn.Conv2d(NUM_THINGS, 32, kernel_size=3, stride=1, padding=1),  # Output: 32 x 7 x 7
             #nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
@@ -116,7 +119,7 @@ if __name__ == "__main__":
 
 
     """ ENV SETUP """
-    env = parallel.parallel_env(grid_size=GRID_SIZE)
+    
 
     num_agents = len(env.possible_agents)
     num_actions = env.action_space(env.possible_agents[0]).n
@@ -125,7 +128,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     """ RENDER THE POLICY """
     
-    env = parallel.parallel_env(render_mode="human",grid_size=GRID_SIZE)
+
     
     agent_pred1 = Agent(num_actions=num_actions).to(device)
     if policies[0] is not None:
@@ -143,8 +146,7 @@ if __name__ == "__main__":
     if policies[3] is not None:
         agent_flee2.load_state_dict(torch.load(policies[3]))
 
-    with torch.no_grad():
-        env = parallel.parallel_env(render_mode="human",grid_size=GRID_SIZE)
+
 
 
     with torch.no_grad():

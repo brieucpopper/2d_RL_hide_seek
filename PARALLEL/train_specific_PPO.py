@@ -3,23 +3,25 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
-import parallel
+import movable_wall_parallel
 import torch
 import torch.nn as nn
 import numpy as np
 from torch.distributions import Categorical
 
-GRID_SIZE = 6
+GRID_SIZE = 8
 CKPT_PATH = "/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_model_pred1.pth"
 
 RANDOM = 3
 TRAINING = 2
 
+NUM_THINGS = 6 # number of things in the grid wall, pred1, pred2, h1, h2, movablewall
+
 POLICIES = [
     TRAINING, # pred_1
-    TRAINING,    # pred_2
-    TRAINING,  # hider_1
-    TRAINING]    # hider_2
+    RANDOM,    # pred_2
+    RANDOM,  # hider_1
+    RANDOM]    # hider_2
 # This should be either TRAINING, RANDOM, or a string that is a path to a ckpt for each agent
 
 
@@ -31,7 +33,7 @@ class Agent(nn.Module):
 
         # CNN architecture inspired by DQN for Atari
         self.network = nn.Sequential(
-            nn.Conv2d(5, 32, kernel_size=3, stride=1, padding=1),  # Output: 32 x 7 x 7
+            nn.Conv2d(NUM_THINGS, 32, kernel_size=3, stride=1, padding=1),  # Output: 32 x 7 x 7
             #nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
@@ -98,30 +100,30 @@ if __name__ == "__main__":
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ent_coef = 0.1
-    vf_coef = 0.1
-    clip_coef = 0.07
+    vf_coef = 0.4
+    clip_coef = 0.08
     gamma = 0.95
-    batch_size = 32
+    batch_size = 64
     max_cycles = 250
-    total_episodes = 500
+    total_episodes = 1500
 
     do_train = True
 
     """ ENV SETUP """
-    env = parallel.parallel_env(grid_size=GRID_SIZE)
+    env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,walls=False)
 
     num_agents = len(env.possible_agents)
     num_actions = env.action_space(env.possible_agents[0]).n
     observation_size = env.observation_space(env.possible_agents[0]).shape
 
     agent_pred_1 = Agent(num_actions=num_actions).to(device)
-    optimizer_p1 = optim.Adam(agent_pred_1.parameters(), lr=0.001, eps=1e-5)
+    optimizer_p1 = optim.Adam(agent_pred_1.parameters(), lr=0.0001, eps=1e-5)
     agent_pred_2 = Agent(num_actions=num_actions).to(device)
-    optimizer_p2 = optim.Adam(agent_pred_2.parameters(), lr=0.001, eps=1e-5)
+    optimizer_p2 = optim.Adam(agent_pred_2.parameters(), lr=0.0001, eps=1e-5)
     agent_hider_1 = Agent(num_actions=num_actions).to(device)
-    optimizer_h1 = optim.Adam(agent_hider_1.parameters(), lr=0.001, eps=1e-5)
+    optimizer_h1 = optim.Adam(agent_hider_1.parameters(), lr=0.0001, eps=1e-5)
     agent_hider_2 = Agent(num_actions=num_actions).to(device)
-    optimizer_h2 = optim.Adam(agent_hider_2.parameters(), lr=0.001, eps=1e-5)
+    optimizer_h2 = optim.Adam(agent_hider_2.parameters(), lr=0.0001, eps=1e-5)
 
     def get_agent_from_idx(idx):
         if idx == 0:
@@ -184,7 +186,7 @@ if __name__ == "__main__":
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
     total_episodic_return = 0
-    rb_obs = torch.zeros((max_cycles, num_agents, 5,GRID_SIZE,GRID_SIZE)).to(device)
+    rb_obs = torch.zeros((max_cycles, num_agents, NUM_THINGS,GRID_SIZE,GRID_SIZE)).to(device)
     rb_actions = torch.zeros((max_cycles, num_agents)).to(device)
     rb_logprobs = torch.zeros((max_cycles, num_agents)).to(device)
     rb_rewards = torch.zeros((max_cycles, num_agents)).to(device)
@@ -201,6 +203,7 @@ if __name__ == "__main__":
         all_returnspred2 = []
         all_returnshider1 = []
         all_returnshider2 = []
+        best_pred1 = - 10000
         for episode in range(total_episodes):
             # collect an episode
             with torch.no_grad():
@@ -379,10 +382,16 @@ if __name__ == "__main__":
             all_returnshider2.append(total_episodic_return[3])
 
             #print smoothed returns average last 20
+
             print(f"Smoothed Returns for pred_1: {np.mean(all_returnspred1[-20:])}")
             print(f"Smoothed Returns for pred_2: {np.mean(all_returnspred2[-20:])}")
             print(f"Smoothed Returns for hider_1: {np.mean(all_returnshider1[-20:])}")
             print(f"Smoothed Returns for hider_2: {np.mean(all_returnshider2[-20:])}")
+
+            if best_pred1 < np.mean(all_returnspred1[-20:]):
+                best_pred1 = np.mean(all_returnspred1[-20:])
+                torch.save(agent_pred_1.state_dict(), "./best_pred1_nowalls_6x8x8.pth")
+                print("Saved best model for pred_1")
 
             print(f"Episode Length: {end_step}")
             print("")
