@@ -319,11 +319,11 @@ class parallel_env(ParallelEnv):
         for agent in self.agents:
             if agent.startswith("pred_1"):
                 
-                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
+                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)/10
                 #rewards[agent] = p1x + p1y
             elif agent.startswith("pred_2"):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]
-                rewards[agent] = p2x
+                rewards[agent] = 1
             elif agent.startswith("hider_1"):
                 rewards[agent] = (np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
                 rewards[agent] = -target_x

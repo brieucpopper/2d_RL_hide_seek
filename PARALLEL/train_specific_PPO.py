@@ -8,8 +8,10 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.distributions import Categorical
+import wandb
 
-GRID_SIZE = 6
+
+GRID_SIZE = 7
 CKPT_PATH = "/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_model_pred1.pth"
 
 RANDOM = 3
@@ -33,21 +35,23 @@ class Agent(nn.Module):
 
         # CNN architecture inspired by DQN for Atari
         self.network = nn.Sequential(
-            nn.Conv2d(NUM_THINGS, 32, kernel_size=3, stride=1, padding=1),  # Output: 32 x 7 x 7
+            nn.Conv2d(NUM_THINGS, 64, kernel_size=3, stride=1, padding=1), 
             #nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
+            nn.LeakyReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
             #nn.BatchNorm2d(64),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
             nn.BatchNorm2d(64),
-            nn.ReLU(),
-            
-            nn.Flatten()  # Output: 64 * 7 * 7 = 3136
+            nn.LeakyReLU(),
+            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1),
+            nn.Flatten(),  # Output: 64 * 7 * 7 = 3136
+            nn.LayerNorm(512),
+
 
         )
-        self.actor = self._layer_init(nn.Linear(2304, num_actions), std=0.01)
-        self.critic = self._layer_init(nn.Linear(2304, 1))
+        self.actor = self._layer_init(nn.Linear(512, num_actions), std=0.01)
+        self.critic = self._layer_init(nn.Linear(512, 1))
 
     def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
         torch.nn.init.orthogonal_(layer.weight, std)
@@ -102,10 +106,10 @@ if __name__ == "__main__":
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ent_coef = 0.1
-    vf_coef = 0.1
+    vf_coef = 0.2
     clip_coef = 0.07
     gamma = 0.95
-    batch_size = 32
+    batch_size = 64
     max_cycles = 250
     total_episodes = 1500
 
@@ -119,13 +123,13 @@ if __name__ == "__main__":
     observation_size = env.observation_space(env.possible_agents[0]).shape
 
     agent_pred_1 = Agent(num_actions=num_actions).to(device)
-    optimizer_p1 = optim.Adam(agent_pred_1.parameters(), lr=0.0001, eps=1e-5)
+    optimizer_p1 = optim.Adam(agent_pred_1.parameters(), lr=0.0006, eps=1e-5)
     agent_pred_2 = Agent(num_actions=num_actions).to(device)
-    optimizer_p2 = optim.Adam(agent_pred_2.parameters(), lr=0.0001, eps=1e-5)
+    optimizer_p2 = optim.Adam(agent_pred_2.parameters(), lr=0.0006, eps=1e-5)
     agent_hider_1 = Agent(num_actions=num_actions).to(device)
-    optimizer_h1 = optim.Adam(agent_hider_1.parameters(), lr=0.0001, eps=1e-5)
+    optimizer_h1 = optim.Adam(agent_hider_1.parameters(), lr=0.0006, eps=1e-5)
     agent_hider_2 = Agent(num_actions=num_actions).to(device)
-    optimizer_h2 = optim.Adam(agent_hider_2.parameters(), lr=0.0001, eps=1e-5)
+    optimizer_h2 = optim.Adam(agent_hider_2.parameters(), lr=0.0006, eps=1e-5)
 
     def get_agent_from_idx(idx):
         if idx == 0:
@@ -198,6 +202,19 @@ if __name__ == "__main__":
 
     if do_train:
         """ TRAINING LOGIC """
+        wandb.init(
+            project="movable-wall-hide-seek",
+            config={
+                "algorithm": "PPO",
+                "total_episodes": total_episodes,
+                "learning_rate": 0.0006,
+                "batch_size": batch_size,
+                "gamma": gamma,
+                "ent_coef": ent_coef,
+                "vf_coef": vf_coef,
+                "clip_coef": clip_coef,
+            }
+        )
         
         # train for n number of episodes
         best_smoothed_return = -10000
@@ -416,3 +433,19 @@ if __name__ == "__main__":
                 print(f"Clip Fraction: {np.mean(clip_fracs)}")
                 print(f"Explained Variance: {explained_var.item()}")
                 print("\n-------------------------------------------\n")
+
+
+            wandb.log({
+                    "episode": episode,
+                    "episodic_return_pred_1": total_episodic_return[0],
+                    "episodic_return_pred_2": total_episodic_return[1],
+                    "episodic_return_hider_1": total_episodic_return[2],
+                    "episodic_return_hider_2": total_episodic_return[3],
+                    "episode_length": end_step,
+                    "value_loss": v_loss.item(),
+                    "policy_loss": pg_loss.item(),
+                    "old_approx_kl": old_approx_kl.item(),
+                    "approx_kl": approx_kl.item(),
+                    "clip_fraction": np.mean(clip_fracs),
+                    "explained_variance": explained_var
+            })
