@@ -28,62 +28,23 @@ from torch.distributions import Categorical
 # #ith only trained hider : approx rewared 1800 for hider
 
 
+################################################################################
+#SET ALL OF THESE CAREFULLY
 policies = [
-    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/PARALLEL/best_pred1_nowalls_6x8x8.pth',
+    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/meilleur.pth',
     None,
     None,
     None]
-#with trained seeker : approx 155 reward for hider
-
 #either None : random ; or a path
 
-GRID_SIZE = 8
+GRID_SIZE = 6
 NUM_THINGS = 6
 
-env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,render_mode="human",walls=False,generate_gif=False)
+env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,render_mode="human",walls=False,generate_gif=True)
 
-class Agent(nn.Module):
-    def __init__(self, num_actions):
-        super().__init__()
 
-        # CNN architecture inspired by DQN for Atari
-        self.network = nn.Sequential(
-            nn.Conv2d(NUM_THINGS, 32, kernel_size=3, stride=1, padding=1),  # Output: 32 x 7 x 7
-            #nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
-            #nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
-            #nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Flatten(),  # Output: 64 * 7 * 7 = 3136
-        )
-        self.actor = self._layer_init(nn.Linear(64*GRID_SIZE**2, num_actions), std=0.01)
-        self.critic = self._layer_init(nn.Linear(64*GRID_SIZE**2, 1))
-
-    def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
-        torch.nn.init.orthogonal_(layer.weight, std)
-        torch.nn.init.constant_(layer.bias, bias_const)
-        return layer
-
-    def get_value(self, x):
-        return self.critic(self.network(x / 1.0))  # Normalize input to [0, 1]
-
-    def get_action_and_value(self, x, action=None):
-        #print(x)
-        #print(x.shape)
-        hidden = self.network(x / 1.0)  # Normalize input to [0, 1]
-        
-        logits = self.actor(hidden)
-        #print(f' in get_action_and_valuelogits: {logits}')
-        probs = Categorical(logits=logits)
-        if action is None:
-            action = probs.sample()
-        #print(f' in get_action_and_value: {action}')
-        return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
-
-    
+################################################################################
+from train_specific_PPO import Agent
 
 def batchify_obs(obs, device):
     """Converts PZ style observations to batch of torch arrays."""
@@ -133,18 +94,22 @@ if __name__ == "__main__":
     agent_pred1 = Agent(num_actions=num_actions).to(device)
     if policies[0] is not None:
         agent_pred1.load_state_dict(torch.load(policies[0]))
+        print(f'loaded from {policies[0]}')
 
     agent_pred2 = Agent(num_actions=num_actions).to(device)
     if policies[1] is not None:
         agent_pred2.load_state_dict(torch.load(policies[1]))
+        print(f'loaded from {policies[1]}')
 
     agent_flee1 = Agent(num_actions=num_actions).to(device)
     if policies[2] is not None:
         agent_flee1.load_state_dict(torch.load(policies[2]))
+        print(f'loaded from {policies[2]}')
 
     agent_flee2 = Agent(num_actions=num_actions).to(device)
     if policies[3] is not None:
         agent_flee2.load_state_dict(torch.load(policies[3]))
+        print(f'loaded from {policies[3]}')
 
 
 

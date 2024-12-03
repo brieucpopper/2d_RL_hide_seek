@@ -206,8 +206,9 @@ class parallel_env(ParallelEnv):
                     frame = np.transpose(frame, (1, 0, 2))  # Transpose for correct orientation
                     self.gif_frames.append(frame)
                 else:
-                    imageio.mimsave('./random.gif', self.gif_frames, fps=5)
-                    print("Saved GIF!")
+                    path = './random.gif'
+                    imageio.mimsave(path, self.gif_frames, fps=3)
+                    print(f"saved GIF at path {path}")
                     exit(1)
 
 
@@ -240,18 +241,42 @@ class parallel_env(ParallelEnv):
             grid[WALL,0,edge_idx] = 1
             grid[WALL,grid_size-1,edge_idx] = 1
 
-        
+        ################################################################
         #place 4 walls randomly
+        # if self.walls:
+        #     #add a movable wall in the middle
+        #     grid[MOVABLE_WALL,grid_size//2,grid_size//2] = 1
+
+        #     for _ in range(4):
+        #         potential_x = random.randint(1,grid_size-2)
+        #         potential_y = random.randint(1,grid_size-2)
+
+        #         if grid[MOVABLE_WALL,potential_x,potential_y] == 0:
+        #             grid[WALL,potential_x,potential_y] = 1
+            
+        #custom map with movable wall that can be used to block
+        ################################################################
+
+
+
         if self.walls:
             #add a movable wall in the middle
-            grid[MOVABLE_WALL,grid_size//2,grid_size//2] = 1
+            grid[MOVABLE_WALL,grid_size//2-2,grid_size//2] = 1
 
-            for _ in range(4):
-                potential_x = random.randint(1,grid_size-2)
-                potential_y = random.randint(1,grid_size-2)
+            # for _ in range(0):
+            #     potential_x = random.randint(1,grid_size-2)
+            #     potential_y = random.randint(1,grid_size-2)
 
-                if grid[MOVABLE_WALL,potential_x,potential_y] == 0:
-                    grid[WALL,potential_x,potential_y] = 1
+            #     if grid[MOVABLE_WALL,potential_x,potential_y] == 0:
+            #         grid[WALL,potential_x,potential_y] = 1]
+
+            #walls at y = 4, all x except 1
+            for x in range(1,grid_size-1):
+                grid[WALL,4,x] = 1
+            
+            grid[WALL,4,5] = 0
+
+                
             
         
         
@@ -260,6 +285,13 @@ class parallel_env(ParallelEnv):
         self.infos["pred_2"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
         self.infos["hider_1"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
         self.infos["hider_2"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
+
+        # self.infos["pred_1"]["coords"] = [grid_size-2,1]
+        # self.infos["pred_2"]["coords"] = [grid_size-3,2]
+        # self.infos["hider_1"]["coords"] = [2,3]
+        # self.infos["hider_2"]["coords"] = [1,6]
+        
+        
 
         grid = self.write_grid_from_info(grid,self.infos)
         return grid
@@ -287,7 +319,7 @@ class parallel_env(ParallelEnv):
         for agent in self.agents:
             if agent.startswith("pred_1"):
                 
-                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)/100
+                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
                 #rewards[agent] = p1x + p1y
             elif agent.startswith("pred_2"):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]

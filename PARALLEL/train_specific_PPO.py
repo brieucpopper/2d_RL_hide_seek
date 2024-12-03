@@ -9,7 +9,7 @@ import torch.nn as nn
 import numpy as np
 from torch.distributions import Categorical
 
-GRID_SIZE = 8
+GRID_SIZE = 6
 CKPT_PATH = "/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_model_pred1.pth"
 
 RANDOM = 3
@@ -40,12 +40,14 @@ class Agent(nn.Module):
             #nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
-            #nn.BatchNorm2d(64),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.Flatten(),  # Output: 64 * 7 * 7 = 3136
+            
+            nn.Flatten()  # Output: 64 * 7 * 7 = 3136
+
         )
-        self.actor = self._layer_init(nn.Linear(64*GRID_SIZE**2, num_actions), std=0.01)
-        self.critic = self._layer_init(nn.Linear(64*GRID_SIZE**2, 1))
+        self.actor = self._layer_init(nn.Linear(2304, num_actions), std=0.01)
+        self.critic = self._layer_init(nn.Linear(2304, 1))
 
     def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
         torch.nn.init.orthogonal_(layer.weight, std)
@@ -100,10 +102,10 @@ if __name__ == "__main__":
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ent_coef = 0.1
-    vf_coef = 0.4
-    clip_coef = 0.08
+    vf_coef = 0.1
+    clip_coef = 0.07
     gamma = 0.95
-    batch_size = 64
+    batch_size = 32
     max_cycles = 250
     total_episodes = 1500
 
@@ -205,6 +207,12 @@ if __name__ == "__main__":
         all_returnshider2 = []
         best_pred1 = - 10000
         for episode in range(total_episodes):
+
+
+            if episode > 1000:
+                #ent coef reduce to 0.1
+                ent_coef = 0.1
+
             # collect an episode
             with torch.no_grad():
                 # collect observations and convert to batch of torch tensors
@@ -372,10 +380,7 @@ if __name__ == "__main__":
             var_y = np.var(y_true)
             explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-            print(f"Training episode {episode}")
-            print(f"Episodic Return: {(total_episodic_return)}")
-            print(f" YOU CAN ADD CODE TO SAVE CHECKPOINTS HERE")
-            print(f" make sure the rewards are defined well in parallel.py")
+            
             all_returnspred1.append(total_episodic_return[0])
             all_returnspred2.append(total_episodic_return[1])
             all_returnshider1.append(total_episodic_return[2])
@@ -383,22 +388,31 @@ if __name__ == "__main__":
 
             #print smoothed returns average last 20
 
-            print(f"Smoothed Returns for pred_1: {np.mean(all_returnspred1[-20:])}")
-            print(f"Smoothed Returns for pred_2: {np.mean(all_returnspred2[-20:])}")
-            print(f"Smoothed Returns for hider_1: {np.mean(all_returnshider1[-20:])}")
-            print(f"Smoothed Returns for hider_2: {np.mean(all_returnshider2[-20:])}")
+            
 
-            if best_pred1 < np.mean(all_returnspred1[-20:]):
+            if best_pred1 < np.mean(all_returnspred1[-20:]) and all_returnspred1[-1:] < np.mean(all_returnspred1[-20:]):
                 best_pred1 = np.mean(all_returnspred1[-20:])
-                torch.save(agent_pred_1.state_dict(), "./best_pred1_nowalls_6x8x8.pth")
+                torch.save(agent_pred_1.state_dict(), "./meilleur.pth")
                 print("Saved best model for pred_1")
 
-            print(f"Episode Length: {end_step}")
-            print("")
-            print(f"Value Loss: {v_loss.item()}")
-            print(f"Policy Loss: {pg_loss.item()}")
-            print(f"Old Approx KL: {old_approx_kl.item()}")
-            print(f"Approx KL: {approx_kl.item()}")
-            print(f"Clip Fraction: {np.mean(clip_fracs)}")
-            print(f"Explained Variance: {explained_var.item()}")
-            print("\n-------------------------------------------\n")
+
+            if episode % 40 == 0:
+
+                print(f"Training episode {episode}")
+                print(f"Episodic Return: {(total_episodic_return)}")
+                print(f" YOU CAN ADD CODE TO SAVE CHECKPOINTS HERE")
+                print(f" make sure the rewards are defined well in parallel.py")
+
+                print(f"Smoothed Returns for pred_1: {np.mean(all_returnspred1[-20:])}")
+                print(f"Smoothed Returns for pred_2: {np.mean(all_returnspred2[-20:])}")
+                print(f"Smoothed Returns for hider_1: {np.mean(all_returnshider1[-20:])}")
+                print(f"Smoothed Returns for hider_2: {np.mean(all_returnshider2[-20:])}")
+                print(f"Episode Length: {end_step}")
+                print("")
+                print(f"Value Loss: {v_loss.item()}")
+                print(f"Policy Loss: {pg_loss.item()}")
+                print(f"Old Approx KL: {old_approx_kl.item()}")
+                print(f"Approx KL: {approx_kl.item()}")
+                print(f"Clip Fraction: {np.mean(clip_fracs)}")
+                print(f"Explained Variance: {explained_var.item()}")
+                print("\n-------------------------------------------\n")
