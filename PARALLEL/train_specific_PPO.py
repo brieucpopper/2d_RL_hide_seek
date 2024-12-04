@@ -5,6 +5,7 @@ import torch.optim as optim
 from torch.distributions.categorical import Categorical
 import parallel
 import torch
+import movable_wall_parallel
 import torch.nn as nn
 import numpy as np
 from torch.distributions import Categorical
@@ -18,7 +19,7 @@ TRAINING = 2
 
 ############################ HIGHLY IMPORTANT VARIABLES TO SET######################################
 GRID_SIZE = 7
-NUM_THINGS = 5 # number of things in the grid wall, pred1, pred2, h1, h2, movablewall
+NUM_THINGS = 6 # number of things in the grid wall, pred1, pred2, h1, h2, movablewall
 
 POLICIES = [
     TRAINING, # pred_1
@@ -28,8 +29,8 @@ POLICIES = [
 # This should be either TRAINING, RANDOM, or a string that is a path to a ckpt for each agent
 
 
-envname = 'parallel-nowalls' #just for wandb logging
-CUSTOMENV = parallel.parallel_env(grid_size=GRID_SIZE)
+envname = 'mparallel-nowalls' #just for wandb logging
+CUSTOMENV = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE)
 # change architecture if needed
 
 ent_coef = 0.1
@@ -351,3 +352,16 @@ if __name__ == "__main__":
             "Clip Fraction": np.mean(clip_fracs),
             "Explained Variance": explained_var.item()
         })
+
+        #if for pred_1 (index 0) episode return and smoothed are greater than -200, save the model
+
+        if total_episodic_return[0] > -200 and np.mean(all_returns[0][-20:]) > -200:
+            #create dir
+            import os
+            if not os.path.exists('./models'):
+                os.makedirs('./models')
+            torch.save({
+                'state_dict': agents[0].state_dict(),
+                'optimizer': optimizers[0].state_dict()
+            }, f'./models/pred1_{episode}.ckpt')
+            exit(1)

@@ -21,14 +21,9 @@ env = parallel_env(render_mode='human',grid_size=7)
  env.close()
 ```
 
+Its best to watch any play with watch_play_and_stats.py
 Make sure the reward is setup as you want !
 
-
-##  weights
-
-Stores the checkpoints for policies
-A checkpoint will only work if grid_Sizes match of course.
-It's basically the weights for the neural nets in the PPO algorithm
 
 ## train_specific_PPO.py
 

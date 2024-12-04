@@ -12,21 +12,6 @@ import torch.nn as nn
 import numpy as np
 from torch.distributions import Categorical
 
-# policies = [
-#     '/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_model.pth',
-#     None,
-#     '/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/best_model_fleee.pth',
-#     None]
-
-#both trained :  approx reward 250 for hider
-
-# policies = [
-#     None,
-#     None,
-#     '/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_model_hider1.pth',
-#     None]
-# #ith only trained hider : approx rewared 1800 for hider
-
 
 ################################################################################
 #SET ALL OF THESE CAREFULLY
@@ -35,13 +20,14 @@ policies = [
     None,
     None,
     None]
-#either None : random ; or a path
+#either None (none here means random)  ; or a path to a pretrained checkpoint
 
-GRID_SIZE = 6
+GRID_SIZE = 7
 NUM_THINGS = 6
-
 env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,render_mode="human",walls=False,generate_gif=True)
 
+#usually creating a GIF and using render mode human is the best, you can watch directly on your screen
+# by setting the variable IS_SCREEN in the env
 
 ################################################################################
 from train_specific_PPO import Agent
