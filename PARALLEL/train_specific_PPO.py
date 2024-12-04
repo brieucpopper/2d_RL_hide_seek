@@ -3,21 +3,22 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
-import movable_wall_parallel
+import parallel
 import torch
 import torch.nn as nn
 import numpy as np
 from torch.distributions import Categorical
 import wandb
-
-
-GRID_SIZE = 7
-CKPT_PATH = "/home/bpopper/letsgo/2d_RL_hide_seek/PARALLEL/weights/best_model_pred1.pth"
-
 RANDOM = 3
 TRAINING = 2
 
-NUM_THINGS = 6 # number of things in the grid wall, pred1, pred2, h1, h2, movablewall
+
+
+
+
+############################ HIGHLY IMPORTANT VARIABLES TO SET######################################
+GRID_SIZE = 7
+NUM_THINGS = 5 # number of things in the grid wall, pred1, pred2, h1, h2, movablewall
 
 POLICIES = [
     TRAINING, # pred_1
@@ -27,6 +28,48 @@ POLICIES = [
 # This should be either TRAINING, RANDOM, or a string that is a path to a ckpt for each agent
 
 
+envname = 'parallel-nowalls' #just for wandb logging
+CUSTOMENV = parallel.parallel_env(grid_size=GRID_SIZE)
+# change architecture if needed
+
+ent_coef = 0.1
+vf_coef = 0.1
+clip_coef = 0.1
+gamma = 0.95
+batch_size = 32
+max_cycles = 200
+total_episodes = 400
+PPO_STEPS = 3
+
+##################################################################################################
+
+
+#init wandb with all the above params
+wandb.init(
+        project="multi-agent-ppo",  # Set your project name
+        config={
+            "env": envname,
+            "GRID_SIZE": GRID_SIZE,
+            "NUM_THINGS": NUM_THINGS,
+            "POLICIES": POLICIES,
+            "ent_coef": ent_coef,
+            "vf_coef": vf_coef,
+            "clip_coef": clip_coef,
+            "gamma": gamma,
+            "batch_size": batch_size,
+            "max_cycles": max_cycles,
+            "total_episodes": total_episodes,
+            "PPO_STEPS": PPO_STEPS,
+        }
+)
+
+#make is_training True if the agent is training
+is_training = []
+for p in POLICIES:
+    if p == TRAINING:
+        is_training.append(True)
+    else:
+        is_training.append(False)
 
 
 class Agent(nn.Module):
@@ -35,23 +78,16 @@ class Agent(nn.Module):
 
         # CNN architecture inspired by DQN for Atari
         self.network = nn.Sequential(
-            nn.Conv2d(NUM_THINGS, 64, kernel_size=3, stride=1, padding=1), 
-            #nn.BatchNorm2d(32),
-            nn.LeakyReLU(),
+            nn.Conv2d(NUM_THINGS, 32, kernel_size=3, stride=1, padding=1),  # Output: 32 x 7 x 7
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
+            nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
-            #nn.BatchNorm2d(64),
-            nn.LeakyReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),  # Output: 64 x 7 x 7
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(),
-            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
             nn.Flatten(),  # Output: 64 * 7 * 7 = 3136
-            nn.LayerNorm(512),
-
-
         )
-        self.actor = self._layer_init(nn.Linear(512, num_actions), std=0.01)
-        self.critic = self._layer_init(nn.Linear(512, 1))
+        self.actor = self._layer_init(nn.Linear(3136, num_actions), std=0.01) #TODO depends on GRID_SIZE
+        self.critic = self._layer_init(nn.Linear(3136, 1))
 
     def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
         torch.nn.init.orthogonal_(layer.weight, std)
@@ -70,124 +106,61 @@ class Agent(nn.Module):
             action = probs.sample()
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
 
-    
 
 def batchify_obs(obs, device):
     """Converts PZ style observations to batch of torch arrays."""
-    # convert to list of np arrays
     obs = np.stack([obs[a] for a in obs], axis=0)
-    # convert to torch
     obs = torch.tensor(obs).to(device)
-
     return obs
-
 
 def batchify(x, device):
     """Converts PZ style returns to batch of torch arrays."""
-    # convert to list of np arrays
     x = np.stack([x[a] for a in x], axis=0)
-    # convert to torch
     x = torch.tensor(x).to(device)
-
     return x
-
 
 def unbatchify(x, env):
     """Converts np array to PZ style arguments."""
     x = x.cpu().numpy()
     x = {a: x[i] for i, a in enumerate(env.possible_agents)}
-
     return x
 
-
 if __name__ == "__main__":
-
-
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ent_coef = 0.1
-    vf_coef = 0.2
-    clip_coef = 0.07
-    gamma = 0.95
-    batch_size = 64
-    max_cycles = 250
-    total_episodes = 1500
-
-    do_train = True
+    
 
     """ ENV SETUP """
-    env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,walls=False)
+    env = CUSTOMENV
 
     num_agents = len(env.possible_agents)
     num_actions = env.action_space(env.possible_agents[0]).n
     observation_size = env.observation_space(env.possible_agents[0]).shape
 
-    agent_pred_1 = Agent(num_actions=num_actions).to(device)
-    optimizer_p1 = optim.Adam(agent_pred_1.parameters(), lr=0.0006, eps=1e-5)
-    agent_pred_2 = Agent(num_actions=num_actions).to(device)
-    optimizer_p2 = optim.Adam(agent_pred_2.parameters(), lr=0.0006, eps=1e-5)
-    agent_hider_1 = Agent(num_actions=num_actions).to(device)
-    optimizer_h1 = optim.Adam(agent_hider_1.parameters(), lr=0.0006, eps=1e-5)
-    agent_hider_2 = Agent(num_actions=num_actions).to(device)
-    optimizer_h2 = optim.Adam(agent_hider_2.parameters(), lr=0.0006, eps=1e-5)
-
-    def get_agent_from_idx(idx):
-        if idx == 0:
-            return agent_pred_1
-        elif idx == 1:
-            return agent_pred_2
-        elif idx == 2:
-            return agent_hider_1
-        elif idx == 3:
-            return agent_hider_2
+    # Specify which agents are being trained
+    # True means the agent will be trained, False means random actions
     
-    def get_agent_str_from_idx(idx):
-        if idx == 0:
-            return "pred_1"
-        elif idx == 1:
-            return "pred_2"
-        elif idx == 2:
-            return "hider_1"
-        elif idx == 3:
-            return "hider_2"
-    
-    def get_agent_idx_from_key(key):
-        if key == "pred_1":
-            return 0
-        elif key == "pred_2":
-            return 1
-        elif key == "hider_1":
-            return 2
-        elif key == "hider_2":
-            return 3
+    assert len(is_training) == num_agents, "is_training must match number of agents"
 
-    # load pretrained agents
-    for i, policy in enumerate(POLICIES):
-        #if is a string
-        if isinstance(policy, str):
-            if i == 0:
-                agent_pred_1.load_state_dict(torch.load(policy))
-                #freeze params
-                for param in agent_pred_1.parameters():
-                    param.requires_grad = False
-            elif i == 1:
-                agent_pred_2.load_state_dict(torch.load(policy))
-                #freeze params
-                for param in agent_pred_2.parameters():
-                    param.requires_grad = False
-            elif i == 2:
-                agent_hider_1.load_state_dict(torch.load(policy))
-                #freeze params
-                for param in agent_hider_1.parameters():
-                    param.requires_grad = False
-            elif i == 3:
-                agent_hider_2.load_state_dict(torch.load(policy))
-                #freeze params
-                for param in agent_hider_2.parameters():
-                    param.requires_grad = False
+    """ LEARNER SETUP """
+    # Create a list of agents, one for each training agent
+    agents = []
+    optimizers = []
+    training_agent_indices = [i for i, training in enumerate(is_training) if training]
+    for idx in training_agent_indices:
+        agent = Agent(num_actions=num_actions).to(device)
+        optimizer=42 # shouldnt access to optimizer if frozen
 
-
-    
+        #if the POLICIES its a string, load ckpt and freeze params
+        if POLICIES[idx].__class__ == str:
+            ckpt = torch.load(POLICIES[idx])
+            agent.load_state_dict(ckpt['state_dict'])
+            for param in agent.parameters():
+                param.requires_grad = False
+        elif POLICIES[idx] == TRAINING:
+            optimizer = optim.Adam(agent.parameters(), lr=0.001, eps=1e-5)
+        agents.append(agent)
+        optimizers.append(optimizer)
 
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
@@ -199,253 +172,182 @@ if __name__ == "__main__":
     rb_terms = torch.zeros((max_cycles, num_agents)).to(device)
     rb_values = torch.zeros((max_cycles, num_agents)).to(device)
 
+    """ TRAINING LOGIC """
+    # Track returns for all agents
+    all_returns = [[] for _ in range(num_agents)]
 
-    if do_train:
-        """ TRAINING LOGIC """
-        wandb.init(
-            project="movable-wall-hide-seek",
-            config={
-                "algorithm": "PPO",
-                "total_episodes": total_episodes,
-                "learning_rate": 0.0006,
-                "batch_size": batch_size,
-                "gamma": gamma,
-                "ent_coef": ent_coef,
-                "vf_coef": vf_coef,
-                "clip_coef": clip_coef,
-            }
-        )
-        
-        # train for n number of episodes
-        best_smoothed_return = -10000
-        all_returnspred1 = []
-        all_returnspred2 = []
-        all_returnshider1 = []
-        all_returnshider2 = []
-        best_pred1 = - 10000
-        for episode in range(total_episodes):
+    for episode in range(total_episodes):
+        # collect an episode
+        with torch.no_grad():
+            # collect observations and convert to batch of torch tensors
+            next_obs, info = env.reset(seed=None)
+            # reset the episodic return
+            total_episodic_return = 0
 
+            # each episode has num_steps
+            for step in range(0, max_cycles):
+                # rollover the observation
+                obs = batchify_obs(next_obs, device)
 
-            if episode > 1000:
-                #ent coef reduce to 0.1
-                ent_coef = 0.1
+                # get action for first agent from the trained agents
+                # get random actions for other agents
+                actions = torch.zeros(num_agents, dtype=torch.long).to(device)
+                logprobs = torch.zeros(num_agents).to(device)
+                values = torch.zeros(num_agents).to(device)
 
-            # collect an episode
+                # Process each agent
+                for i in range(num_agents):
+                    if is_training[i]:
+                        # Find the index of this training agent among training agents
+                        train_idx = training_agent_indices.index(i)
+                        # Get action and value for training agent
+                        agent_obs = obs[i].unsqueeze(0)
+                        actions[i], logprobs[i], _, values[i] = agents[train_idx].get_action_and_value(agent_obs)
+                    else:
+                        # Random action for non-training agents
+                        actions[i] = torch.randint(0, num_actions, (1,)).to(device)
+                        logprobs[i] = torch.log(torch.tensor(1.0/num_actions))
+                        values[i] = 0.0  # No value estimation for random agents
+
+                # execute the environment and log data
+                next_obs, rewards, terms, truncs, infos = env.step(
+                    unbatchify(actions, env)
+                )
+
+                # add to episode storage
+                rb_obs[step] = obs
+                rb_rewards[step] = batchify(rewards, device)
+                rb_terms[step] = batchify(terms, device)
+                rb_actions[step] = actions
+                rb_logprobs[step] = logprobs
+                rb_values[step] = values
+
+                # compute episodic return
+                total_episodic_return += rb_rewards[step].cpu().numpy()
+
+                # if we reach termination or truncation, end
+                if any([terms[a] for a in terms]) or any([truncs[a] for a in truncs]):
+                    end_step = step
+                    break
+
+        # Train only the specified agents
+        for train_idx, agent_idx in enumerate(training_agent_indices):
+            # Bootstrap value and advantages only for the training agent
             with torch.no_grad():
-                # collect observations and convert to batch of torch tensors
-                next_obs, info = env.reset(seed=None)
-                # reset the episodic return
-                total_episodic_return = 0
-
-                # each episode has num_steps
-                for step in range(0, max_cycles):
-                    # rollover the observation
-                    
-                    obs = next_obs.copy()
-                    # get action for first agent from the trained agent
-                    # get random actions for other agents
-                    actions = torch.zeros(num_agents, dtype=torch.long).to(device)
-                    logprobs = torch.zeros(num_agents).to(device)
-                    values = torch.zeros(num_agents).to(device)
-
-                    for i in range(0, num_agents):
-                        if POLICIES[i] == TRAINING:
-                            actions[i], logprobs[i], _, values[i] = get_agent_from_idx(i).get_action_and_value(torch.tensor(obs[get_agent_str_from_idx(i)]).unsqueeze(0).to(device))
-                        elif POLICIES[i] == RANDOM:
-                            actions[i] = torch.randint(0, num_actions, (1,)).to(device)
-                            logprobs[i] = torch.log(torch.tensor(1.0/num_actions))
-                            values[i] = 0.0
-
-            
-                    # execute the environment and log data
-                    next_obs, rewards, terms, truncs, infos = env.step(
-                        unbatchify(actions, env)
-                    )
-
-                    # add to episode storage
-                    for key in ["pred_1", "pred_2", "hider_1", "hider_2"]:
-
-                        rb_obs[step,get_agent_idx_from_key(key)] = torch.tensor(obs[key]).unsqueeze(0).to(device)
-
-                    rb_rewards[step] = batchify(rewards, device)
-                    rb_terms[step] = batchify(terms, device)
-                    rb_actions[step] = actions
-                    rb_logprobs[step] = logprobs
-                    rb_values[step] = values
-
-                    # compute episodic return
-                    total_episodic_return += rb_rewards[step].cpu().numpy()
-
-                    # if we reach termination or truncation, end
-                    if any([terms[a] for a in terms]) or any([truncs[a] for a in truncs]):
-                        end_step = step
-                        break
-
-        
-            with torch.no_grad():
-    
                 rb_advantages = torch.zeros_like(rb_rewards).to(device)
-                for policy_idx in range(num_agents):
-                    if POLICIES[policy_idx] == TRAINING:
-                        
-                        for t in reversed(range(end_step)):
-                            delta = (
-                                rb_rewards[t, policy_idx]  
-                                + gamma * rb_values[t + 1, policy_idx] * rb_terms[t + 1, policy_idx]
-                                - rb_values[t, policy_idx]
-                            )
-                            rb_advantages[t, policy_idx] = delta + gamma * gamma * rb_advantages[t + 1, policy_idx]
-
+                for t in reversed(range(end_step)):
+                    delta = (
+                        rb_rewards[t, agent_idx]  # Only specific agent's reward
+                        + gamma * rb_values[t + 1, agent_idx] * rb_terms[t + 1, agent_idx]
+                        - rb_values[t, agent_idx]
+                    )
+                    rb_advantages[t, agent_idx] = delta + gamma * gamma * rb_advantages[t + 1, agent_idx]
                 rb_returns = rb_advantages + rb_values
 
-            in_training = [POLICIES[i] == TRAINING for i in range(num_agents)]
-
-            ordered_training_policies = [i for i in range(num_agents) if POLICIES[i] == TRAINING] 
-            #for example if pred_1 and hider_1 are training, ordered_training_policies = [0,2]
-
-            #mapping : takes the original policy idx and returns where it is in the ordered_training_policies
-            # for example if pred_1 and hider_1 are training, mapping(0) = 0, mapping(2) = 1
-
-            def mapping(original_idx):
-                return ordered_training_policies.index(original_idx)
-
-            # convert our episodes to batch of individual transitions (only for the trained agents)
-            b_obs = rb_obs[:end_step, in_training]
-            b_logprobs = rb_logprobs[:end_step, in_training]
-            b_actions = rb_actions[:end_step, in_training]
-            b_returns = rb_returns[:end_step, in_training]
-            b_values = rb_values[:end_step, in_training]
-            b_advantages = rb_advantages[:end_step, in_training]
+            # convert our episodes to batch of individual transitions (only for specific agent)
+            b_obs = rb_obs[:end_step, agent_idx]
+            b_logprobs = rb_logprobs[:end_step, agent_idx]
+            b_actions = rb_actions[:end_step, agent_idx]
+            b_returns = rb_returns[:end_step, agent_idx]
+            b_values = rb_values[:end_step, agent_idx]
+            b_advantages = rb_advantages[:end_step, agent_idx]
 
             # Optimizing the policy and value network
             b_index = np.arange(len(b_obs))
             clip_fracs = []
-            for repeat in range(3):
+            for repeat in range(PPO_STEPS):
                 # shuffle the indices we use to access the data
                 np.random.shuffle(b_index)
                 for start in range(0, len(b_obs), batch_size):
                     # select the indices we want to train on
                     end = start + batch_size
                     batch_index = b_index[start:end]
-                    for policy_idx in range(num_agents):
-                        if POLICIES[policy_idx] == TRAINING:
 
-                            #print(f'shape of actions {b_actions.long()[batch_index][:,1].shape}')
-                            
-                            _, newlogprob, entropy, value = get_agent_from_idx(policy_idx).get_action_and_value(
-                            b_obs[batch_index][:,mapping(policy_idx),:,:,:], b_actions.long()[batch_index][:,mapping(policy_idx)]
-                            )
-                            
-                            logratio = newlogprob - b_logprobs[batch_index][:,mapping(policy_idx)]
-                            ratio = logratio.exp()
+                    _, newlogprob, entropy, value = agents[train_idx].get_action_and_value(
+                        b_obs[batch_index], b_actions.long()[batch_index]
+                    )
+                    logratio = newlogprob - b_logprobs[batch_index]
+                    ratio = logratio.exp()
 
-                            with torch.no_grad():
-                                # calculate approx_kl http://joschu.net/blog/kl-approx.html
-                                old_approx_kl = (-logratio).mean()
-                                approx_kl = ((ratio - 1) - logratio).mean()
-                                clip_fracs += [
-                                    ((ratio - 1.0).abs() > clip_coef).float().mean().item()
-                                ]
+                    with torch.no_grad():
+                        # calculate approx_kl http://joschu.net/blog/kl-approx.html
+                        old_approx_kl = (-logratio).mean()
+                        approx_kl = ((ratio - 1) - logratio).mean()
+                        clip_fracs += [
+                            ((ratio - 1.0).abs() > clip_coef).float().mean().item()
+                        ]
 
-                            # normalize advantages
-                            advantages = b_advantages[batch_index]
-                            advantages = (advantages - advantages.mean()) / (
-                                advantages.std() + 1e-8
-                            )
+                    # normalize advantages
+                    advantages = b_advantages[batch_index]
+                    advantages = (advantages - advantages.mean()) / (
+                        advantages.std() + 1e-8
+                    )
 
-                            # Policy loss
-                            pg_loss1 = -b_advantages[batch_index][:,mapping(policy_idx)] * ratio
-                            pg_loss2 = -b_advantages[batch_index][:,mapping(policy_idx)] * torch.clamp(
-                                ratio, 1 - clip_coef, 1 + clip_coef
-                            )
-                            pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+                    # Policy loss
+                    pg_loss1 = -b_advantages[batch_index] * ratio
+                    pg_loss2 = -b_advantages[batch_index] * torch.clamp(
+                        ratio, 1 - clip_coef, 1 + clip_coef
+                    )
+                    pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
-                            # Value loss
-                            value = value.flatten()
-                            v_loss_unclipped = (value - b_returns[batch_index][:,mapping(policy_idx)]) ** 2
-                            v_clipped = b_values[batch_index][:,mapping(policy_idx)] + torch.clamp(
-                                value - b_values[batch_index][:,mapping(policy_idx)],
-                                -clip_coef,
-                                clip_coef,
-                            )
-                            v_loss_clipped = (v_clipped - b_returns[batch_index][:,mapping(policy_idx)]) ** 2
-                            v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                            v_loss = 0.5 * v_loss_max.mean()
+                    # Value loss
+                    value = value.flatten()
+                    v_loss_unclipped = (value - b_returns[batch_index]) ** 2
+                    v_clipped = b_values[batch_index] + torch.clamp(
+                        value - b_values[batch_index],
+                        -clip_coef,
+                        clip_coef,
+                    )
+                    v_loss_clipped = (v_clipped - b_returns[batch_index]) ** 2
+                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
+                    v_loss = 0.5 * v_loss_max.mean()
 
-                            entropy_loss = entropy.mean()
-                            loss = pg_loss - ent_coef * entropy_loss + v_loss * vf_coef
+                    entropy_loss = entropy.mean()
+                    loss = pg_loss - ent_coef * entropy_loss + v_loss * vf_coef
 
-                            def get_optimizer_from_idx(idx):
-                                if idx == 0:
-                                    return optimizer_p1
-                                elif idx == 1:
-                                    return optimizer_p2
-                                elif idx == 2:
-                                    return optimizer_h1
-                                elif idx == 3:
-                                    return optimizer_h2
-                            
-                            optimizer = get_optimizer_from_idx(policy_idx)
+                    optimizers[train_idx].zero_grad()
+                    loss.backward()
+                    optimizers[train_idx].step()
 
-                            optimizer.zero_grad()
-                            loss.backward()
-                            optimizer.step()
-
-                    
-
+            # Store returns for the training agents
             y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
             var_y = np.var(y_true)
             explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
-            
-            all_returnspred1.append(total_episodic_return[0])
-            all_returnspred2.append(total_episodic_return[1])
-            all_returnshider1.append(total_episodic_return[2])
-            all_returnshider2.append(total_episodic_return[3])
+        # Accumulate returns for all agents
+        for i in range(num_agents):
+            all_returns[i].append(total_episodic_return[i])
 
-            #print smoothed returns average last 20
+        if episode % 10 == 0:
+            print(f"Training episode {episode}")
+            print(f"Episodic Return: {(total_episodic_return)}")
 
-            
+            # Print smoothed returns for each agent
+            for i in range(num_agents):
+                status = "Training" if is_training[i] else "Random"
+                print(f"Smoothed Returns for agent_{i} ({status}): {np.mean(all_returns[i][-20:])}")
 
-            if best_pred1 < np.mean(all_returnspred1[-20:]) and all_returnspred1[-1:] < np.mean(all_returnspred1[-20:]):
-                best_pred1 = np.mean(all_returnspred1[-20:])
-                torch.save(agent_pred_1.state_dict(), "./meilleur.pth")
-                print("Saved best model for pred_1")
+            print(f"Episode Length: {end_step}")
+            print("")
+            print(f"Value Loss: {v_loss.item()}")
+            print(f"Policy Loss: {pg_loss.item()}")
+            print(f"Old Approx KL: {old_approx_kl.item()}")
+            print(f"Approx KL: {approx_kl.item()}")
+            print(f"Clip Fraction: {np.mean(clip_fracs)}")
+            print(f"Explained Variance: {explained_var.item()}")
+            print("\n-------------------------------------------\n")
 
-
-            if episode % 40 == 0:
-
-                print(f"Training episode {episode}")
-                print(f"Episodic Return: {(total_episodic_return)}")
-                print(f" YOU CAN ADD CODE TO SAVE CHECKPOINTS HERE")
-                print(f" make sure the rewards are defined well in parallel.py")
-
-                print(f"Smoothed Returns for pred_1: {np.mean(all_returnspred1[-20:])}")
-                print(f"Smoothed Returns for pred_2: {np.mean(all_returnspred2[-20:])}")
-                print(f"Smoothed Returns for hider_1: {np.mean(all_returnshider1[-20:])}")
-                print(f"Smoothed Returns for hider_2: {np.mean(all_returnshider2[-20:])}")
-                print(f"Episode Length: {end_step}")
-                print("")
-                print(f"Value Loss: {v_loss.item()}")
-                print(f"Policy Loss: {pg_loss.item()}")
-                print(f"Old Approx KL: {old_approx_kl.item()}")
-                print(f"Approx KL: {approx_kl.item()}")
-                print(f"Clip Fraction: {np.mean(clip_fracs)}")
-                print(f"Explained Variance: {explained_var.item()}")
-                print("\n-------------------------------------------\n")
-
-
-            wandb.log({
-                    "episode": episode,
-                    "episodic_return_pred_1": total_episodic_return[0],
-                    "episodic_return_pred_2": total_episodic_return[1],
-                    "episodic_return_hider_1": total_episodic_return[2],
-                    "episodic_return_hider_2": total_episodic_return[3],
-                    "episode_length": end_step,
-                    "value_loss": v_loss.item(),
-                    "policy_loss": pg_loss.item(),
-                    "old_approx_kl": old_approx_kl.item(),
-                    "approx_kl": approx_kl.item(),
-                    "clip_fraction": np.mean(clip_fracs),
-                    "explained_variance": explained_var
-            })
+        #log all with wandb
+        wandb.log({
+            "Ep return pred1": total_episodic_return[0],
+            "Ep return pred2": total_episodic_return[1],
+            "Ep return hider1": total_episodic_return[2],
+            "Ep return hider2": total_episodic_return[3],
+            "Episode Length": end_step,
+            "Value Loss": v_loss.item(),
+            "Policy Loss": pg_loss.item(),
+            "Old Approx KL": old_approx_kl.item(),
+            "Approx KL": approx_kl.item(),
+            "Clip Fraction": np.mean(clip_fracs),
+            "Explained Variance": explained_var.item()
+        })

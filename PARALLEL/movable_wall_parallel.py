@@ -260,6 +260,7 @@ class parallel_env(ParallelEnv):
 
 
         if self.walls:
+            print("USING WALLLLLLLS")
             #add a movable wall in the middle
             grid[MOVABLE_WALL,grid_size//2-2,grid_size//2] = 1
 
@@ -319,17 +320,16 @@ class parallel_env(ParallelEnv):
         for agent in self.agents:
             if agent.startswith("pred_1"):
                 
-                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)/10
+                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
                 #rewards[agent] = p1x + p1y
             elif agent.startswith("pred_2"):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]
-                rewards[agent] = 1
+                rewards[agent] = 0
             elif agent.startswith("hider_1"):
-                rewards[agent] = (np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
-                rewards[agent] = -target_x
+                rewards[agent] = 0
+                rewards[agent] = 0
             else:
-                rewards[agent] = - hider2x - hider2y
-        #$print(rewards)
+                rewards[agent] = 0
         return rewards
     
 
