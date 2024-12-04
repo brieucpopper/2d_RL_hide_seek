@@ -16,7 +16,7 @@ from torch.distributions import Categorical
 ################################################################################
 #SET ALL OF THESE CAREFULLY
 policies = [
-    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/DEMO_WEIGHTS/pred1_204.ckpt',
+    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/DEMO_WEIGHTS/agent_0_175.ckpt',
     None,
     None,
     None]
