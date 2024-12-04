@@ -45,24 +45,7 @@ PPO_STEPS = 3
 ##################################################################################################
 
 
-#init wandb with all the above params
-wandb.init(
-        project="multi-agent-ppo",  # Set your project name
-        config={
-            "env": envname,
-            "GRID_SIZE": GRID_SIZE,
-            "NUM_THINGS": NUM_THINGS,
-            "POLICIES": POLICIES,
-            "ent_coef": ent_coef,
-            "vf_coef": vf_coef,
-            "clip_coef": clip_coef,
-            "gamma": gamma,
-            "batch_size": batch_size,
-            "max_cycles": max_cycles,
-            "total_episodes": total_episodes,
-            "PPO_STEPS": PPO_STEPS,
-        }
-)
+
 
 #make is_training True if the agent is training
 is_training = []
@@ -127,6 +110,24 @@ def unbatchify(x, env):
     return x
 
 if __name__ == "__main__":
+        #init wandb with all the above params
+    wandb.init(
+            project="multi-agent-ppo",  # Set your project name
+            config={
+                "env": envname,
+                "GRID_SIZE": GRID_SIZE,
+                "NUM_THINGS": NUM_THINGS,
+                "POLICIES": POLICIES,
+                "ent_coef": ent_coef,
+                "vf_coef": vf_coef,
+                "clip_coef": clip_coef,
+                "gamma": gamma,
+                "batch_size": batch_size,
+                "max_cycles": max_cycles,
+                "total_episodes": total_episodes,
+                "PPO_STEPS": PPO_STEPS,
+            }
+    )
     """ALGO PARAMS"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -360,8 +361,6 @@ if __name__ == "__main__":
             import os
             if not os.path.exists('./models'):
                 os.makedirs('./models')
-            torch.save({
-                'state_dict': agents[0].state_dict(),
-                'optimizer': optimizers[0].state_dict()
-            }, f'./models/pred1_{episode}.ckpt')
+            #save just state dict for 0
+            torch.save(agents[0].state_dict(), f'./models/agent_0_{episode}.ckpt')
             exit(1)
