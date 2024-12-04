@@ -77,6 +77,8 @@ class parallel_env(ParallelEnv):
         self.render_mode = render_mode
         self.CELL_SIZE = 90
         self.walls = walls #true or false
+        if(self.walls):
+            print("Using WALLS")
         self.generate_gif = generate_gif
         self.gif_frames = []
         self.IS_SCREEN = False
@@ -138,6 +140,13 @@ class parallel_env(ParallelEnv):
                                 (i * self.CELL_SIZE, self.grid_size * self.CELL_SIZE))
                 pygame.draw.line(self.render_surface, (0, 0, 0), (0, i * self.CELL_SIZE),
                                 (self.grid_size * self.CELL_SIZE, i * self.CELL_SIZE))
+                
+            #blit coords
+            font = pygame.font.Font(None, 5)
+            for y in range(self.grid_size):
+                for x in range(self.grid_size):
+                    text = font.render(f"{x},{y}", True, (0, 0, 0))
+                    self.render_surface.blit(text, (x * self.CELL_SIZE + 5, y * self.CELL_SIZE + 5))
 
             # Draw objects on the grid
             for y in range(self.grid_size):
@@ -201,13 +210,13 @@ class parallel_env(ParallelEnv):
                 if not hasattr(self, 'gif_frames'):
                     self.gif_frames = []
 
-                if len(self.gif_frames) < 120:
+                if len(self.gif_frames) < 90:
                     frame = pygame.surfarray.array3d(self.render_surface)
                     frame = np.transpose(frame, (1, 0, 2))  # Transpose for correct orientation
                     self.gif_frames.append(frame)
                 else:
                     path = './random.gif'
-                    imageio.mimsave(path, self.gif_frames, fps=3)
+                    imageio.mimsave(path, self.gif_frames, fps=2)
                     print(f"saved GIF at path {path}")
                     exit(1)
 
@@ -260,9 +269,9 @@ class parallel_env(ParallelEnv):
 
 
         if self.walls:
-            print("USING WALLLLLLLS")
+            
             #add a movable wall in the middle
-            grid[MOVABLE_WALL,grid_size//2-2,grid_size//2] = 1
+            grid[MOVABLE_WALL,2,3] = 1
 
             # for _ in range(0):
             #     potential_x = random.randint(1,grid_size-2)
@@ -273,9 +282,9 @@ class parallel_env(ParallelEnv):
 
             #walls at y = 4, all x except 1
             for x in range(1,grid_size-1):
-                grid[WALL,4,x] = 1
+                grid[WALL,3,x] = 1
             
-            grid[WALL,4,5] = 0
+            grid[WALL,3,3] = 0
 
                 
             
@@ -287,10 +296,10 @@ class parallel_env(ParallelEnv):
         self.infos["hider_1"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
         self.infos["hider_2"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
 
-        # self.infos["pred_1"]["coords"] = [grid_size-2,1]
-        # self.infos["pred_2"]["coords"] = [grid_size-3,2]
-        # self.infos["hider_1"]["coords"] = [2,3]
-        # self.infos["hider_2"]["coords"] = [1,6]
+        self.infos["pred_1"]["coords"] = [4,5]
+        self.infos["pred_2"]["coords"] = [5,1]
+        self.infos["hider_1"]["coords"] = [2,4]
+        self.infos["hider_2"]["coords"] = [1,1]
         
         
 
@@ -326,8 +335,7 @@ class parallel_env(ParallelEnv):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]
                 rewards[agent] = 0
             elif agent.startswith("hider_1"):
-                rewards[agent] = 0
-                rewards[agent] = 0
+                rewards[agent] = (np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
             else:
                 rewards[agent] = 0
         return rewards
@@ -369,7 +377,7 @@ class parallel_env(ParallelEnv):
 
             
             if self.grid[WALL,potential_new_coords[0],potential_new_coords[1]] == 1:
-                isValidMove = False
+                isValidMove = False # Trying to move in a wall
             else:
                 if self.grid[MOVABLE_WALL,potential_new_coords[0],potential_new_coords[1]] == 1:
                     # There is a movable wall
@@ -377,10 +385,10 @@ class parallel_env(ParallelEnv):
                     if movable_wall_moved:
                         isValidMove = False # The wall was already moved by an agent
                     else:
-                        #the wall can be moved IF THERE ISNT A WALL BEHIND
+                        #the wall can be moved IF THERE ISNT A WALL BEHIND OR A PLAYER's old position (you can defend a wall this way)
                         new_wall_coords = coord_be4 + np.array([2*dx,2*dy],dtype=np.int8)
                         new_wall_coords = np.clip(new_wall_coords,0,self.grid_size-1)
-                        if self.grid[WALL,new_wall_coords[0],new_wall_coords[1]] == 1:
+                        if self.grid[WALL,new_wall_coords[0],new_wall_coords[1]] == 1 or self.grid[PRED_1,new_wall_coords[0],new_wall_coords[1]] == 1 or self.grid[PRED_2,new_wall_coords[0],new_wall_coords[1]] == 1 or self.grid[HIDER_1,new_wall_coords[0],new_wall_coords[1]] == 1 or self.grid[HIDER_2,new_wall_coords[0],new_wall_coords[1]] == 1:
                             isValidMove = False
                         else:
                             isValidMove = True

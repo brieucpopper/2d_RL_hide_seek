@@ -16,15 +16,15 @@ from torch.distributions import Categorical
 ################################################################################
 #SET ALL OF THESE CAREFULLY
 policies = [
-    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/DEMO_WEIGHTS/agent_0_175.ckpt',
+    '/home/bpopper/letsgo/2d_RL_hide_seek/models/agentwalls_482.ckpt',#'/home/hice1/bpopper3/scratch/2d_RL_hide_seek/DEMO_WEIGHTS/agent_0_175.ckpt',
     None,
-    None,
+    '/home/bpopper/letsgo/2d_RL_hide_seek/models/defender_450.ckpt',
     None]
 #either None (none here means random)  ; or a path to a pretrained checkpoint
 
 GRID_SIZE = 7
 NUM_THINGS = 6
-env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,render_mode="human",walls=False,generate_gif=True)
+env = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,render_mode="human",walls=True,generate_gif=True)
 
 #usually creating a GIF and using render mode human is the best, you can watch directly on your screen
 # by setting the variable IS_SCREEN in the env

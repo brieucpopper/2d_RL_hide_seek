@@ -10,10 +10,7 @@ import torch.nn as nn
 import numpy as np
 from torch.distributions import Categorical
 import wandb
-RANDOM = 3
-TRAINING = 2
-
-
+RANDOM = 42
 
 
 
@@ -21,39 +18,45 @@ TRAINING = 2
 GRID_SIZE = 7
 NUM_THINGS = 6 # number of things in the grid wall, pred1, pred2, h1, h2, movablewall
 
-POLICIES = [
-    TRAINING, # pred_1
+
+INITIALIZATIONS = [
+    '/home/bpopper/letsgo/2d_RL_hide_seek/models/agentwalls_482.ckpt', # pred_1
     RANDOM,    # pred_2
-    RANDOM,  # hider_1
-    RANDOM]    # hider_2
-# This should be either TRAINING, RANDOM, or a string that is a path to a ckpt for each agent
+    RANDOM,     # hider_1
+    RANDOM,
+    ]    # hider_2
+#should be either RANDOM ; or a path to a pretrained checkpoint (a String)
 
 
-envname = 'mparallel-nowalls' #just for wandb logging
-CUSTOMENV = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE)
+
+IS_TRAINING =   [
+    False,
+    False,
+    True,
+    False
+]
+#either True or False, if False, weights are frozen (or if random it will stay random)
+
+
+envname = 'mparallel-walls' #just for wandb logging
+CUSTOMENV = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,walls=True)
 # change architecture if needed
 
 ent_coef = 0.1
 vf_coef = 0.1
 clip_coef = 0.1
-gamma = 0.95
+gamma = 0.96
 batch_size = 32
 max_cycles = 200
-total_episodes = 400
+total_episodes = 1000
 PPO_STEPS = 3
+
+reminder = '''DONT FORGET TO ADD CODE TO SAVE CHECKPOINTS IF YOU WANT TO DO THAT'''
+print(reminder)
 
 ##################################################################################################
 
 
-
-
-#make is_training True if the agent is training
-is_training = []
-for p in POLICIES:
-    if p == TRAINING:
-        is_training.append(True)
-    else:
-        is_training.append(False)
 
 
 class Agent(nn.Module):
@@ -117,7 +120,8 @@ if __name__ == "__main__":
                 "env": envname,
                 "GRID_SIZE": GRID_SIZE,
                 "NUM_THINGS": NUM_THINGS,
-                "POLICIES": POLICIES,
+                "INITIALIZATIONS": INITIALIZATIONS,
+                "IS_TRAINING": IS_TRAINING,
                 "ent_coef": ent_coef,
                 "vf_coef": vf_coef,
                 "clip_coef": clip_coef,
@@ -139,30 +143,39 @@ if __name__ == "__main__":
     num_actions = env.action_space(env.possible_agents[0]).n
     observation_size = env.observation_space(env.possible_agents[0]).shape
 
-    # Specify which agents are being trained
-    # True means the agent will be trained, False means random actions
-    
-    assert len(is_training) == num_agents, "is_training must match number of agents"
+   
 
     """ LEARNER SETUP """
     # Create a list of agents, one for each training agent
-    agents = []
+    training_agents = []
     optimizers = []
-    training_agent_indices = [i for i, training in enumerate(is_training) if training]
+    training_agent_indices = [i for i, training in enumerate(IS_TRAINING) if training]
+    frozen_agent_indices = [i for i, training in enumerate(IS_TRAINING) if not training and INITIALIZATIONS[i] != RANDOM]
+    # a frozen is one that is NOT TRAINING and NOT RANDOM
     for idx in training_agent_indices:
-        agent = Agent(num_actions=num_actions).to(device)
-        optimizer=42 # shouldnt access to optimizer if frozen
 
-        #if the POLICIES its a string, load ckpt and freeze params
-        if POLICIES[idx].__class__ == str:
-            ckpt = torch.load(POLICIES[idx])
-            agent.load_state_dict(ckpt['state_dict'])
+        
+        agent = Agent(num_actions=num_actions).to(device)
+
+        if INITIALIZATIONS[idx] != RANDOM:
+            agent.load_state_dict(torch.load(INITIALIZATIONS[idx]))
+            print(f'loaded from {INITIALIZATIONS[idx]}')
+
+        optimizer = optim.Adam(agent.parameters(), lr=0.001, eps=1e-5)
+        training_agents.append(agent)
+        optimizers.append(optimizer)
+    
+    frozen_agents = [] # These agents are not random, but are NOT TRAINING ; initialized with a checkpoint
+    for idx, init in enumerate(INITIALIZATIONS):
+        if init != RANDOM and not IS_TRAINING[idx]:
+            agent = Agent(num_actions=num_actions).to(device)
+            agent.load_state_dict(torch.load(init))
+            agent.eval()
+            #freeze weights
             for param in agent.parameters():
                 param.requires_grad = False
-        elif POLICIES[idx] == TRAINING:
-            optimizer = optim.Adam(agent.parameters(), lr=0.001, eps=1e-5)
-        agents.append(agent)
-        optimizers.append(optimizer)
+            print(f' loaded from {init}')
+            frozen_agents.append(agent)
 
     """ ALGO LOGIC: EPISODE STORAGE"""
     end_step = 0
@@ -199,14 +212,22 @@ if __name__ == "__main__":
 
                 # Process each agent
                 for i in range(num_agents):
-                    if is_training[i]:
+                    if IS_TRAINING[i]:
                         # Find the index of this training agent among training agents
                         train_idx = training_agent_indices.index(i)
                         # Get action and value for training agent
                         agent_obs = obs[i].unsqueeze(0)
-                        actions[i], logprobs[i], _, values[i] = agents[train_idx].get_action_and_value(agent_obs)
+                        actions[i], logprobs[i], _, values[i] = training_agents[train_idx].get_action_and_value(agent_obs)
+                    elif INITIALIZATIONS[i] != RANDOM:
+                        #this is a frozen agent (not training, but not random because it has a checkpoint)
+                        frozen_idx = frozen_agent_indices.index(i)
+                        agent_obs = obs[i].unsqueeze(0)
+                        actions[i], logprobs[i], _, values[i] = frozen_agents[frozen_idx].get_action_and_value(agent_obs)
+
+                        logprobs[i] = torch.log(torch.tensor(1.0/num_actions))
+                        values[i] = 0.0  # No value estimation for frozen agents
                     else:
-                        # Random action for non-training agents
+                        # Random action for random agents
                         actions[i] = torch.randint(0, num_actions, (1,)).to(device)
                         logprobs[i] = torch.log(torch.tensor(1.0/num_actions))
                         values[i] = 0.0  # No value estimation for random agents
@@ -265,7 +286,7 @@ if __name__ == "__main__":
                     end = start + batch_size
                     batch_index = b_index[start:end]
 
-                    _, newlogprob, entropy, value = agents[train_idx].get_action_and_value(
+                    _, newlogprob, entropy, value = training_agents[train_idx].get_action_and_value(
                         b_obs[batch_index], b_actions.long()[batch_index]
                     )
                     logratio = newlogprob - b_logprobs[batch_index]
@@ -326,7 +347,16 @@ if __name__ == "__main__":
 
             # Print smoothed returns for each agent
             for i in range(num_agents):
-                status = "Training" if is_training[i] else "Random"
+                status = None
+
+                if IS_TRAINING[i]:
+                    status = "Training"
+                elif INITIALIZATIONS[i] == RANDOM:
+                    status = "Random"
+                else:
+                    status = "Frozen"
+
+
                 print(f"Smoothed Returns for agent_{i} ({status}): {np.mean(all_returns[i][-20:])}")
 
             print(f"Episode Length: {end_step}")
@@ -356,11 +386,22 @@ if __name__ == "__main__":
 
         #if for pred_1 (index 0) episode return and smoothed are greater than -200, save the model
 
-        if total_episodic_return[0] > -200 and np.mean(all_returns[0][-20:]) > -200:
+        # if total_episodic_return[0] > -210 and np.mean(all_returns[0][-20:]) > -210:
+        #     #create dir
+        #     import os
+        #     if not os.path.exists('./models'):
+        #         os.makedirs('./models')f
+        #     #save just state dict for 0
+        #     torch.save(agents[0].state_dict(), f'./models/agentwalls_{episode}.ckpt')
+        #     exit(1)
+
+        #save after 400 episodes
+
+        if episode == 450:
             #create dir
             import os
             if not os.path.exists('./models'):
                 os.makedirs('./models')
             #save just state dict for 0
-            torch.save(agents[0].state_dict(), f'./models/agent_0_{episode}.ckpt')
+            torch.save(training_agents[0].state_dict(), f'./models/defender_{episode}.ckpt')
             exit(1)
