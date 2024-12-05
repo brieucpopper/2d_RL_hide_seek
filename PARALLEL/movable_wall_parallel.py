@@ -408,6 +408,8 @@ class parallel_env(ParallelEnv):
         return self.write_grid_from_info(self.grid,self.infos)
 
     def step(self,actions):
+        if self.render_mode == "human":
+            self.render()
 
         if not actions:
             self.agents = []
@@ -442,8 +444,7 @@ class parallel_env(ParallelEnv):
         if env_truncation:
             self.agents = []
 
-        if self.render_mode == "human":
-            self.render()
+        
 
         return observations, rewards, terminations, truncations, infos
 

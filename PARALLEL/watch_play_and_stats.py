@@ -16,9 +16,9 @@ from torch.distributions import Categorical
 ################################################################################
 #SET ALL OF THESE CAREFULLY
 policies = [
-    '/home/bpopper/letsgo/2d_RL_hide_seek/models/agentwalls_482.ckpt',#'/home/hice1/bpopper3/scratch/2d_RL_hide_seek/DEMO_WEIGHTS/agent_0_175.ckpt',
+    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/PARALLEL/DEMO_WEIGHTS/PRED_smallnetwork_mwalls.ckpt',#'/home/hice1/bpopper3/scratch/2d_RL_hide_seek/DEMO_WEIGHTS/agent_0_175.ckpt',
     None,
-    '/home/bpopper/letsgo/2d_RL_hide_seek/models/defender_450.ckpt',
+    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/models/HIDER_SOLOTRAIN1000.ckpt',
     None]
 #either None (none here means random)  ; or a path to a pretrained checkpoint
 

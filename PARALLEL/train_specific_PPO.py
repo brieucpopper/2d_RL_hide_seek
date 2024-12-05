@@ -20,7 +20,7 @@ NUM_THINGS = 6 # number of things in the grid wall, pred1, pred2, h1, h2, movabl
 
 
 INITIALIZATIONS = [
-    '/home/bpopper/letsgo/2d_RL_hide_seek/models/agentwalls_482.ckpt', # pred_1
+    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/PARALLEL/DEMO_WEIGHTS/PRED_smallnetwork_mwalls.ckpt', # pred_1
     RANDOM,    # pred_2
     RANDOM,     # hider_1
     RANDOM,
@@ -42,13 +42,13 @@ envname = 'mparallel-walls' #just for wandb logging
 CUSTOMENV = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,walls=True)
 # change architecture if needed
 
-ent_coef = 0.1
-vf_coef = 0.1
+ent_coef = 0.4
+vf_coef = 0.2
 clip_coef = 0.1
-gamma = 0.96
-batch_size = 32
+gamma = 0.975
+batch_size = 64
 max_cycles = 200
-total_episodes = 1000
+total_episodes = 1600
 PPO_STEPS = 3
 
 reminder = '''DONT FORGET TO ADD CODE TO SAVE CHECKPOINTS IF YOU WANT TO DO THAT'''
@@ -58,6 +58,104 @@ print(reminder)
 
 
 
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+from torch.distributions import Categorical
+
+class Agent2(nn.Module):
+    def __init__(self, num_actions, num_input_channels=NUM_THINGS):
+        super().__init__()
+        
+        # Deeper CNN with residual connections and batch normalization
+        self.network = nn.Sequential(
+            # Initial feature extraction block
+            nn.Conv2d(num_input_channels, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            
+            # Residual block 1
+            self._make_residual_block(32, 64),
+            
+            # Residual block 2
+            self._make_residual_block(64, 128),
+            
+            # Additional conv layer for more feature extraction
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            
+            nn.Flatten()
+        )
+        
+        # Compute the flattened feature size dynamically
+        with torch.no_grad():
+            dummy_input = torch.zeros(1, num_input_channels, 7, 7)
+            feature_size = self.network(dummy_input).shape[1]
+        
+        # Improved actor and critic heads with layer normalization
+        self.actor_hidden = self._layer_init(nn.Linear(feature_size, 256))
+        self.actor_norm = nn.LayerNorm(256)
+        self.actor = self._layer_init(nn.Linear(256, num_actions), std=0.01)
+        
+        self.critic_hidden = self._layer_init(nn.Linear(feature_size, 256))
+        self.critic_norm = nn.LayerNorm(256)
+        self.critic = self._layer_init(nn.Linear(256, 1))
+    
+    def _make_residual_block(self, in_channels, out_channels):
+        """Create a residual block with batch normalization."""
+        shortcut = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1),
+            nn.BatchNorm2d(out_channels)
+        ) if in_channels != out_channels else nn.Identity()
+        
+        block = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels)
+        )
+        
+        return nn.Sequential(
+            block,
+            nn.ReLU(inplace=True)
+        )
+    
+    def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
+        """Initialize layer weights using orthogonal initialization."""
+        torch.nn.init.orthogonal_(layer.weight, std)
+        torch.nn.init.constant_(layer.bias, bias_const)
+        return layer
+    
+    def get_value(self, x):
+        """Get the critic's value estimate."""
+        hidden = self.network(x / 255.0)  # Normalize input to [0, 1]
+        hidden = F.relu(self.critic_norm(self.critic_hidden(hidden)))
+        return self.critic(hidden)
+    
+    def get_action_and_value(self, x, action=None):
+        """Get action, log probability, entropy, and value."""
+        hidden = self.network(x / 255.0)  # Normalize input to [0, 1]
+        
+        # Actor head with separate hidden layer and normalization
+        actor_hidden = F.relu(self.actor_norm(self.actor_hidden(hidden)))
+        logits = self.actor(actor_hidden)
+        
+        # Use softmax to ensure proper probability distribution
+        probs = Categorical(probs=F.softmax(logits, dim=-1))
+        
+        if action is None:
+            action = probs.sample()
+        
+        return (
+            action, 
+            probs.log_prob(action), 
+            probs.entropy(), 
+            self.get_value(x)
+        )
 
 class Agent(nn.Module):
     def __init__(self, num_actions):
@@ -92,7 +190,6 @@ class Agent(nn.Module):
         if action is None:
             action = probs.sample()
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden)
-
 
 def batchify_obs(obs, device):
     """Converts PZ style observations to batch of torch arrays."""
@@ -395,13 +492,11 @@ if __name__ == "__main__":
         #     torch.save(agents[0].state_dict(), f'./models/agentwalls_{episode}.ckpt')
         #     exit(1)
 
-        #save after 400 episodes
 
-        if episode == 450:
-            #create dir
-            import os
-            if not os.path.exists('./models'):
-                os.makedirs('./models')
-            #save just state dict for 0
-            torch.save(training_agents[0].state_dict(), f'./models/defender_{episode}.ckpt')
-            exit(1)
+
+        #if reward greater than 600 for hider_1 both for last and smoothed for last 5
+        #every 100 epochs save the 2 models
+
+        if episode % 100 == 0:
+            torch.save(training_agents[0].state_dict(), f'./models/HIDER_SOLOTRAIN{episode}.ckpt')
+        
