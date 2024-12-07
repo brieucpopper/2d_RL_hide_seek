@@ -20,7 +20,7 @@ NUM_THINGS = 6 # number of things in the grid wall, pred1, pred2, h1, h2, movabl
 
 
 INITIALIZATIONS = [
-    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/PARALLEL/DEMO_WEIGHTS/PRED_smallnetwork_mwalls.ckpt', # pred_1
+    RANDOM, # pred_1
     RANDOM,    # pred_2
     RANDOM,     # hider_1
     RANDOM,
@@ -30,22 +30,22 @@ INITIALIZATIONS = [
 
 
 IS_TRAINING =   [
-    False,
-    False,
     True,
+    False,
+    False,
     False
 ]
 #either True or False, if False, weights are frozen (or if random it will stay random)
 
 
 envname = 'mparallel-walls' #just for wandb logging
-CUSTOMENV = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,walls=True)
+CUSTOMENV = movable_wall_parallel.parallel_env(grid_size=GRID_SIZE,walls=False)
 # change architecture if needed
 
-ent_coef = 0.4
+ent_coef = 0.1
 vf_coef = 0.2
 clip_coef = 0.1
-gamma = 0.975
+gamma = 0.95
 batch_size = 64
 max_cycles = 200
 total_episodes = 1600
@@ -171,8 +171,8 @@ class Agent(nn.Module):
             nn.ReLU(),
             nn.Flatten(),  # Output: 64 * 7 * 7 = 3136
         )
-        self.actor = self._layer_init(nn.Linear(3136, num_actions), std=0.01) #TODO depends on GRID_SIZE
-        self.critic = self._layer_init(nn.Linear(3136, 1))
+        self.actor = self._layer_init(nn.Linear(64*GRID_SIZE**2, num_actions), std=0.01) #TODO depends on GRID_SIZE
+        self.critic = self._layer_init(nn.Linear(64*GRID_SIZE**2, 1))
 
     def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
         torch.nn.init.orthogonal_(layer.weight, std)
@@ -498,5 +498,8 @@ if __name__ == "__main__":
         #every 100 epochs save the 2 models
 
         if episode % 100 == 0:
-            torch.save(training_agents[0].state_dict(), f'./models/HIDER_SOLOTRAIN{episode}.ckpt')
+            import os
+            if not os.path.exists('./models_exp1'):
+                os.makedirs('./models_exp1')
+            torch.save(training_agents[0].state_dict(), f'./models_exp1/{episode}.ckpt')
         

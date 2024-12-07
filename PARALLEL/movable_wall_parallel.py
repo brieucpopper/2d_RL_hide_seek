@@ -296,10 +296,10 @@ class parallel_env(ParallelEnv):
         self.infos["hider_1"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
         self.infos["hider_2"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
 
-        self.infos["pred_1"]["coords"] = [4,5]
-        self.infos["pred_2"]["coords"] = [5,1]
-        self.infos["hider_1"]["coords"] = [2,4]
-        self.infos["hider_2"]["coords"] = [1,1]
+        # self.infos["pred_1"]["coords"] = [4,5]
+        # self.infos["pred_2"]["coords"] = [5,1]
+        # self.infos["hider_1"]["coords"] = [2,4]
+        # self.infos["hider_2"]["coords"] = [1,1]
         
         
 
@@ -329,13 +329,13 @@ class parallel_env(ParallelEnv):
         for agent in self.agents:
             if agent.startswith("pred_1"):
                 
-                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
+                rewards[agent] = -10*(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)/(self.grid_size**2)
                 #rewards[agent] = p1x + p1y
             elif agent.startswith("pred_2"):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]
                 rewards[agent] = 0
             elif agent.startswith("hider_1"):
-                rewards[agent] = (np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
+                rewards[agent] = 10*(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)/(self.grid_size**2)
             else:
                 rewards[agent] = 0
         return rewards
