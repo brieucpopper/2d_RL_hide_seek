@@ -235,6 +235,7 @@ class parallel_env(ParallelEnv):
         observations = {agent: self.grid for agent in self.agents}
         self.state = observations
         return observations, self.infos
+    
     def generate_grid(self,grid_size):
         '''
         Generates a grid of size grid_size x grid_size with walls on the edges and predator and prey in the corners
@@ -288,11 +289,14 @@ class parallel_env(ParallelEnv):
             grid[WALL,3,3] = 0
 
                 
-            
-        
-        
-
-        self.infos["pred_1"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
+        for agent in ["pred_1","pred_2","hider_1","hider_2"]:
+            while True:
+                self.infos[agent]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
+                #Make sure we don't initialize the agent inside a wall!
+                if not np.sum(grid[[WALL,MOVABLE_WALL],self.infos[agent]["coords"][0],self.infos[agent]["coords"][1]]):
+                    break
+   
+        '''self.infos["pred_1"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
         self.infos["pred_2"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
         self.infos["hider_1"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
         self.infos["hider_2"]["coords"] = [random.randint(1,grid_size-2),random.randint(1,grid_size-2)]
@@ -300,7 +304,7 @@ class parallel_env(ParallelEnv):
         self.infos["pred_1"]["coords"] = [4,5]
         self.infos["pred_2"]["coords"] = [5,1]
         self.infos["hider_1"]["coords"] = [2,4]
-        self.infos["hider_2"]["coords"] = [1,1]
+        self.infos["hider_2"]["coords"] = [1,1]'''
         
         
 
