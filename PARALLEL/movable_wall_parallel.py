@@ -69,6 +69,7 @@ class parallel_env(ParallelEnv):
         These attributes should not be changed after initialization.
         """
         self.possible_agents = ["pred_1", "pred_2", "hider_1", "hider_2"]
+        self.agent_layers = {"pred_1":PRED_1, "pred_2":PRED_2, "hider_1":HIDER_1, "hider_2":HIDER_2,}
         self.grid_size = grid_size
         # optional: a mapping between agent name and ID
         self.agent_name_mapping = dict(
@@ -152,19 +153,19 @@ class parallel_env(ParallelEnv):
             for y in range(self.grid_size):
                 for x in range(self.grid_size):
                     if self.grid[PRED_1, y, x] == 1:
-                        sprite = pygame.image.load('./PARALLEL/sprites/pred_1.png')
+                        sprite = pygame.image.load('./sprites/pred_1.png')
                         self.render_surface.blit(sprite, (x * self.CELL_SIZE + 20, y * self.CELL_SIZE + 50))
 
                     if self.grid[PRED_2, y, x] == 1:
-                        sprite = pygame.image.load('./PARALLEL/sprites/pred_2.png')
+                        sprite = pygame.image.load('./sprites/pred_2.png')
                         self.render_surface.blit(sprite, (x * self.CELL_SIZE + 20, y * self.CELL_SIZE + 20))
 
                     if self.grid[HIDER_1, y, x] == 1:
-                        sprite = pygame.image.load('./PARALLEL/sprites/hider_1.png')
+                        sprite = pygame.image.load('./sprites/hider_1.png')
                         self.render_surface.blit(sprite, (x * self.CELL_SIZE + 50, y * self.CELL_SIZE + 50))
 
                     if self.grid[HIDER_2, y, x] == 1:
-                        sprite = pygame.image.load('./PARALLEL/sprites/hider_2.png')
+                        sprite = pygame.image.load('./sprites/hider_2.png')
                         self.render_surface.blit(sprite, (x * self.CELL_SIZE + 50, y * self.CELL_SIZE + 20))
 
                     if self.grid[WALL, y, x] == 1:
@@ -305,10 +306,66 @@ class parallel_env(ParallelEnv):
 
         grid = self.write_grid_from_info(grid,self.infos)
         return grid
-    def compute_rewards_all_agents(self):
+    
+    ############################### Define reward functions here, to call in compute_reward_all_agents ###################################
+    def individual_rewards(self, d_scale = 10, catch_bonus = 50):
+        """Calculates an individual reward for each agent:
+        Preds: Malus for high distance with closest hider (each step), bonus if hider "caught" (shared if 2 preds catch the same hider)
+        Minimum: -d_scale*NUM_ITERS = -2000 | Maximum: NUM_ITERS*catch_bonus = 10000
+        
+        Hiders: Bonus for high distance with closest pred, malus if caught
+        Minimum: -NUM_ITERS*catch_bonus = -10000 | Maximum: d_scale*NUM_ITERS = 2000
+        """
+        rewards = {}
+        p1x = self.infos["pred_1"]["coords"][0]
+        p1y = self.infos["pred_1"]["coords"][1]
 
-        #for now the rewards are 0 for all hiders, and x+y for all predators
-
+        h1x = self.infos["hider_1"]["coords"][0]
+        h1y = self.infos["hider_1"]["coords"][1]
+  
+        p2x = self.infos["pred_2"]["coords"][0]
+        p2y = self.infos["pred_2"]["coords"][1]
+        
+        h2x= self.infos["hider_2"]["coords"][0]
+        h2y = self.infos["hider_2"]["coords"][1]
+        
+        for agent in self.agents:
+            if agent.startswith("pred_1"):
+                d = np.sqrt(min((np.abs(p1x-h1x)**2 + np.abs(p1y-h1y)**2),(np.abs(p1x-h2x)**2 + np.abs(p1y-h2y)**2)))
+                bonus = 0
+                if (p1x,p1y) == (h1x,h1y) or (p1x,p1y) == (h2x,h2y):
+                    bonus = catch_bonus
+                    if (p1x,p1y) == (p2x,p2y):
+                        bonus = catch_bonus/2
+                rewards[agent] = -d_scale*d/self.grid_size+bonus
+                
+            elif agent.startswith("pred_2"):
+                d = np.sqrt(min((np.abs(p2x-h1x)**2 + np.abs(p2y-h1y)**2),(np.abs(p2x-h2x)**2 + np.abs(p2y-h2y)**2)))
+                bonus = 0
+                if (p2x,p2y) == (h1x,h1y) or (p2x,p2y) == (h2x,h2y):
+                    bonus = catch_bonus
+                    if (p1x,p1y) == (p2x,p2y):
+                        bonus = catch_bonus/2
+                rewards[agent] = -d_scale*d/self.grid_size+bonus
+                
+            elif agent.startswith("hider_1"):
+                d = np.sqrt(min((np.abs(p2x-h1x)**2 + np.abs(p2y-h1y)**2),(np.abs(p1x-h1x)**2 + np.abs(p1y-h1y)**2)))
+                malus = 0
+                if (p2x,p2y) == (h1x,h1y) or (p1x,p1y) == (h1x,h1y):
+                    malus = catch_bonus
+                rewards[agent] = d_scale*d/self.grid_size-malus
+            
+            else:
+                d = np.sqrt(min((np.abs(p2x-h2x)**2 + np.abs(p2y-h2y)**2),(np.abs(p1x-h2x)**2 + np.abs(p1y-h2y)**2)))
+                malus = 0
+                if (p2x,p2y) == (h2x,h2y) or (p1x,p1y) == (h2x,h2y):
+                    malus = catch_bonus
+                rewards[agent] = d_scale*d/self.grid_size-malus
+        return rewards
+        
+        
+    def follow_reward(self):
+        """Simple reward function, where preds follow the closest hider, and hider run away"""
         rewards = {}
 
         target_x = self.infos["hider_1"]["coords"][0]
@@ -317,30 +374,37 @@ class parallel_env(ParallelEnv):
         p1x = self.infos["pred_1"]["coords"][0]
         p1y = self.infos["pred_1"]["coords"][1]
 
-        hider2x = self.infos["hider_2"]["coords"][0]
-        hider2y = self.infos["hider_2"]["coords"][1]
-
+        h1x = self.infos["hider_1"]["coords"][0]
+        h1y = self.infos["hider_1"]["coords"][1]
+  
         p2x = self.infos["pred_2"]["coords"][0]
-
-        hider2x = self.infos["hider_2"]["coords"][0]
-        hider2y = self.infos["hider_2"]["coords"][1]
+        p2y = self.infos["pred_2"]["coords"][1]
+        
+        h2x= self.infos["hider_2"]["coords"][0]
+        h2y = self.infos["hider_2"]["coords"][1]
 
     
+        
         for agent in self.agents:
             if agent.startswith("pred_1"):
-                
-                rewards[agent] = -(np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
+                rewards[agent] = -min((np.abs(p1x-h1x)**2 + np.abs(p1y-h1y)**2),(np.abs(p1x-h2x)**2 + np.abs(p1y-h2y)**2))
                 #rewards[agent] = p1x + p1y
             elif agent.startswith("pred_2"):
                 #rewards[agent] = self.infos["pred_2"]["coords"][0]
-                rewards[agent] = 0
+                rewards[agent] = -min((np.abs(p2x-h1x)**2 + np.abs(p2y-h1y)**2),(np.abs(p2x-h2x)**2 + np.abs(p2y-h2y)**2))
             elif agent.startswith("hider_1"):
-                rewards[agent] = (np.abs(p1x-target_x)**2 + np.abs(p1y-target_y)**2)
+                rewards[agent] = min((np.abs(p2x-h1x)**2 + np.abs(p2y-h1y)**2),(np.abs(p1x-h1x)**2 + np.abs(p1y-h1y)**2))
             else:
-                rewards[agent] = 0
+                rewards[agent] = min((np.abs(p2x-h2x)**2 + np.abs(p2y-h2y)**2),(np.abs(p1x-h2x)**2 + np.abs(p1y-h2y)**2))
         return rewards
     
-
+    ####################################################################################################################################
+    
+    def compute_rewards_all_agents(self):
+        #Calls one of the reward functions defined above
+        return self.individual_rewards()
+       
+    
     def write_grid_from_info(self,grid_to_change,info):
         #write zeros to grid_to_change[PRED]
         grid_to_change[PRED_1] = 0
