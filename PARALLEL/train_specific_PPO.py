@@ -31,7 +31,7 @@ INITIALIZATIONS = [
 
 IS_TRAINING =   [
     True,
-    False,
+    True,
     False,
     False
 ]
@@ -64,98 +64,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch.distributions import Categorical
-
-class Agent2(nn.Module):
-    def __init__(self, num_actions, num_input_channels=NUM_THINGS):
-        super().__init__()
-        
-        # Deeper CNN with residual connections and batch normalization
-        self.network = nn.Sequential(
-            # Initial feature extraction block
-            nn.Conv2d(num_input_channels, 32, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            
-            # Residual block 1
-            self._make_residual_block(32, 64),
-            
-            # Residual block 2
-            self._make_residual_block(64, 128),
-            
-            # Additional conv layer for more feature extraction
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            
-            nn.Flatten()
-        )
-        
-        # Compute the flattened feature size dynamically
-        with torch.no_grad():
-            dummy_input = torch.zeros(1, num_input_channels, 7, 7)
-            feature_size = self.network(dummy_input).shape[1]
-        
-        # Improved actor and critic heads with layer normalization
-        self.actor_hidden = self._layer_init(nn.Linear(feature_size, 256))
-        self.actor_norm = nn.LayerNorm(256)
-        self.actor = self._layer_init(nn.Linear(256, num_actions), std=0.01)
-        
-        self.critic_hidden = self._layer_init(nn.Linear(feature_size, 256))
-        self.critic_norm = nn.LayerNorm(256)
-        self.critic = self._layer_init(nn.Linear(256, 1))
-    
-    def _make_residual_block(self, in_channels, out_channels):
-        """Create a residual block with batch normalization."""
-        shortcut = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1),
-            nn.BatchNorm2d(out_channels)
-        ) if in_channels != out_channels else nn.Identity()
-        
-        block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(out_channels)
-        )
-        
-        return nn.Sequential(
-            block,
-            nn.ReLU(inplace=True)
-        )
-    
-    def _layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
-        """Initialize layer weights using orthogonal initialization."""
-        torch.nn.init.orthogonal_(layer.weight, std)
-        torch.nn.init.constant_(layer.bias, bias_const)
-        return layer
-    
-    def get_value(self, x):
-        """Get the critic's value estimate."""
-        hidden = self.network(x / 255.0)  # Normalize input to [0, 1]
-        hidden = F.relu(self.critic_norm(self.critic_hidden(hidden)))
-        return self.critic(hidden)
-    
-    def get_action_and_value(self, x, action=None):
-        """Get action, log probability, entropy, and value."""
-        hidden = self.network(x / 255.0)  # Normalize input to [0, 1]
-        
-        # Actor head with separate hidden layer and normalization
-        actor_hidden = F.relu(self.actor_norm(self.actor_hidden(hidden)))
-        logits = self.actor(actor_hidden)
-        
-        # Use softmax to ensure proper probability distribution
-        probs = Categorical(probs=F.softmax(logits, dim=-1))
-        
-        if action is None:
-            action = probs.sample()
-        
-        return (
-            action, 
-            probs.log_prob(action), 
-            probs.entropy(), 
-            self.get_value(x)
-        )
 
 class Agent(nn.Module):
     def __init__(self, num_actions):
@@ -499,7 +407,7 @@ if __name__ == "__main__":
 
         if episode % 100 == 0:
             import os
-            if not os.path.exists('./models_exp1'):
-                os.makedirs('./models_exp1')
-            torch.save(training_agents[0].state_dict(), f'./models_exp1/{episode}.ckpt')
+            if not os.path.exists('./models_exp21'):
+                os.makedirs('./models_exp21')
+            torch.save(training_agents[0].state_dict(), f'./models_exp21/{episode}.ckpt')
         

@@ -341,6 +341,61 @@ class parallel_env(ParallelEnv):
         return rewards
     
 
+    def individual_rewards(self, d_scale = 10, catch_bonus = 50):
+        """Calculates an individual reward for each agent:
+        Preds: Malus for high distance with closest hider (each step), bonus if hider "caught" (shared if 2 preds catch the same hider)
+        Minimum: -d_scale*NUM_ITERS = -2000 | Maximum: NUM_ITERS*catch_bonus = 10000
+        
+        Hiders: Bonus for high distance with closest pred, malus if caught
+        Minimum: -NUM_ITERS*catch_bonus = -10000 | Maximum: d_scale*NUM_ITERS = 2000
+        """
+        rewards = {}
+        p1x = self.infos["pred_1"]["coords"][0]
+        p1y = self.infos["pred_1"]["coords"][1]
+
+        h1x = self.infos["hider_1"]["coords"][0]
+        h1y = self.infos["hider_1"]["coords"][1]
+  
+        p2x = self.infos["pred_2"]["coords"][0]
+        p2y = self.infos["pred_2"]["coords"][1]
+        
+        h2x= self.infos["hider_2"]["coords"][0]
+        h2y = self.infos["hider_2"]["coords"][1]
+        
+        for agent in self.agents:
+            if agent.startswith("pred_1"):
+                d = np.sqrt(min((np.abs(p1x-h1x)**2 + np.abs(p1y-h1y)**2),(np.abs(p1x-h2x)**2 + np.abs(p1y-h2y)**2)))
+                bonus = 0
+                if (p1x,p1y) == (h1x,h1y) or (p1x,p1y) == (h2x,h2y):
+                    bonus = catch_bonus
+                    if (p1x,p1y) == (p2x,p2y):
+                        bonus = catch_bonus/2
+                rewards[agent] = -d_scale*d/self.grid_size+bonus
+                
+            elif agent.startswith("pred_2"):
+                d = np.sqrt(min((np.abs(p2x-h1x)**2 + np.abs(p2y-h1y)**2),(np.abs(p2x-h2x)**2 + np.abs(p2y-h2y)**2)))
+                bonus = 0
+                if (p2x,p2y) == (h1x,h1y) or (p2x,p2y) == (h2x,h2y):
+                    bonus = catch_bonus
+                    if (p1x,p1y) == (p2x,p2y):
+                        bonus = catch_bonus/2
+                rewards[agent] = -d_scale*d/self.grid_size+bonus
+                
+            elif agent.startswith("hider_1"):
+                d = np.sqrt(min((np.abs(p2x-h1x)**2 + np.abs(p2y-h1y)**2),(np.abs(p1x-h1x)**2 + np.abs(p1y-h1y)**2)))
+                malus = 0
+                if (p2x,p2y) == (h1x,h1y) or (p1x,p1y) == (h1x,h1y):
+                    malus = catch_bonus
+                rewards[agent] = d_scale*d/self.grid_size-malus
+            
+            else:
+                d = np.sqrt(min((np.abs(p2x-h2x)**2 + np.abs(p2y-h2y)**2),(np.abs(p1x-h2x)**2 + np.abs(p1y-h2y)**2)))
+                malus = 0
+                if (p2x,p2y) == (h2x,h2y) or (p1x,p1y) == (h2x,h2y):
+                    malus = catch_bonus
+                rewards[agent] = d_scale*d/self.grid_size-malus
+        return rewards
+
     def write_grid_from_info(self,grid_to_change,info):
         #write zeros to grid_to_change[PRED]
         grid_to_change[PRED_1] = 0
@@ -437,7 +492,7 @@ class parallel_env(ParallelEnv):
         #update self.state
 
         #COMPUTE REWARD TODO
-        rewards = self.compute_rewards_all_agents()
+        rewards = self.individual_rewards()
 
         infos = {agent: {} for agent in self.agents}
 
