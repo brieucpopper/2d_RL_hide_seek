@@ -32,3 +32,8 @@ Set SAVE_PRED_POL and SAVE_HIDER_POL to True/False depending on whether you want
 
 If you do not want to log the graphs to weights and biases live (wandb) you can just ignore it.
 
+=======
+If you don't want to log the graphs to weights and biases live (wandb) you can just ignore it
+
+
+Finally there is code in branch ```offline``` and documentation that goes with there
