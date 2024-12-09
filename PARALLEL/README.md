@@ -1,3 +1,14 @@
+Quickstart : from the root 2d_RL_hide_seek just run
+
+```python PARALLEL/train_specific_PPO.py```
+
+Or to generate a GIF :
+
+```python watch_play_and_stats.py```
+
+to watch the poli
+
+
 ## parallel.py defines the PettingZoo parallel env
 
 the grid is one hot encoded :
