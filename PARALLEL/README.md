@@ -33,12 +33,17 @@ You can specify if each agent should be
  - random (random actions)
  - follow a pre-defined checkpoint (with frozen weights)
 
-
+The only variables that need to be modified are delimited in the code clearly.
 ## watch play and stats.py
 
 Load policies, or random agents.
 
-you can watch the policies rendered with pygame, and get stats printed to terminal (like average rewards)
+Generates a GIF by default
+don't forget to set
+
+GRIDSIZE
+the environment
+the policies you want to see play in the GIF
 
 ## movable_wall_parallel.py
 
@@ -71,4 +76,12 @@ while env.agents:
 env.close()
 ```
 
-You can play as pred_1 with the above code which helps test out the wall @!
+You can play as pred_1 with the above code which helps test out the wall !
+
+## centralized scripts
+
+These scripts are useful for the experiments where there is only one policy for the two teams.
+This includes 
+ - watch_play_and_stats_centralized.py (and notebook though easier to work with .py)
+ - PPO_centralized.ipynb
+

@@ -3,15 +3,18 @@ Final project for DRL 8803 class
 ![random](https://github.com/user-attachments/assets/cb374134-8b6e-4ddc-b5e7-3dc3f8f8cd28)
 
 
+This GIF is an example of our agents playing the game
 
-yml file enables creating a compatible python environment to run the project
-
-Its probably easier to install
- - PettingZoo
- - Pygame
- - PyTorch (with cuda if possible for faster things)
+The easiest way to get our code running is to have a PyTorch (ideally on GPU but not necessary) python 3.10 conda env, then pip install
+ - PettingZoo (pip install pettingzoo)
+ - wandb (pip install wandb)
 
 
-The main useful code for now is in ./PARALLEL
+The folders here are
+ - old (old code for our initial experiments, not useful in the end)
+ - PARALLEL : all the useful code is there because in the end we chose to go with a parallel pettingzoo environment, see the README.md there for details
 
-The readme in there has documentation on how to use everything
+
+Quickstart : once your python env is activated run (from ./2d_RL_hide_seek)
+
+```python PARALLEL/train_specific_PPO.py```

@@ -20,7 +20,7 @@ NUM_THINGS = 6 # number of things in the grid wall, pred1, pred2, h1, h2, movabl
 
 
 INITIALIZATIONS = [
-    '/home/hice1/bpopper3/scratch/2d_RL_hide_seek/PARALLEL/DEMO_WEIGHTS/PRED_smallnetwork_mwalls.ckpt', # pred_1
+    RANDOM, # pred_1
     RANDOM,    # pred_2
     RANDOM,     # hider_1
     RANDOM,
