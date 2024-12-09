@@ -19,3 +19,5 @@ The folders here are
 Quickstart : once your python env is activated run (from ./2d_RL_hide_seek)
 
 ```python PARALLEL/train_specific_PPO.py```
+
+If you don't want to log the graphs to weights and biases live (wandb) you can just ignore it
