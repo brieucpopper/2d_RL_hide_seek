@@ -89,10 +89,12 @@ env.close()
 
 You can play as pred_1 with the above code which helps test out the wall !
 
-## centralized scripts
+## Shared policy scripts
 
 These scripts are useful for the experiments where there is only one policy for the two teams.
 This includes 
  - watch_play_and_stats_centralized.py (and notebook though easier to work with .py)
  - PPO_centralized.ipynb
+
+This runs the experiments training a policy for each team. To choose which team to train, you can set the corresponding variable to True in IS_POLICY_TRAINING at the beginning of this file. To train the agents using a pretrained policy, set INITIALIZATION to the correct path for the corresponding agents. Set SAVE_PRED_POL and SAVE_HIDER_POL to True/False depending on whether you want to save checkpoints.
 
