@@ -21,4 +21,14 @@ Quickstart : once your python env is activated run (from ./2d_RL_hide_seek)
 
 ```python PARALLEL/train_specific_PPO.py```
 
-If you don't want to log the graphs to weights and biases live (wandb) you can just ignore it
+This runs the experiments training each agent with an independent policy. To choose which agent to train, you can set the corresponding variable to True in IS_TRAINING at the beginning of this file.
+To train the agents using a pretrained policy, set INITIALIZATION to the correct path for the corresponding agent.
+
+To train the agents with a shared policy, you can run the notebook PPO_centralized.ipynb (from ./2d_RL_hide_seek/PARALLEL)
+
+This runs the experiments training a policy for each team. To choose which team to train, you can set the corresponding variable to True in IS_POLICY_TRAINING at the beginning of this file.
+To train the agents using a pretrained policy, set INITIALIZATION to the correct path for the corresponding agents.
+Set SAVE_PRED_POL and SAVE_HIDER_POL to True/False depending on whether you want to save checkpoints.
+
+If you do not want to log the graphs to weights and biases live (wandb) you can just ignore it.
+
