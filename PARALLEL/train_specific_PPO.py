@@ -498,5 +498,9 @@ if __name__ == "__main__":
         #every 100 epochs save the 2 models
 
         if episode % 100 == 0:
+            #create dir
+            import os
+            if not os.path.exists('./models'):
+                os.makedirs('./models')
             torch.save(training_agents[0].state_dict(), f'./models/HIDER_SOLOTRAIN{episode}.ckpt')
         
