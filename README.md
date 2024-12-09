@@ -11,6 +11,7 @@ The easiest way to get our code running is to have a PyTorch (ideally on GPU but
  - pygame (pip install pygame)
  - imageio (pip install imageio)
 
+Note: you might need to create a wandb account, and may be asked to log in the first time you are running the script. To do so, go to [this website](https://wandb.ai/site/) and sign up using your github account. You can create a free academic account, this is useful to log the different metrics throughout the training.
 
 The folders here are
  - old (old code for our initial experiments, not useful in the end)
