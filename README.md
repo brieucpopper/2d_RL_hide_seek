@@ -9,6 +9,7 @@ The easiest way to get our code running is to have a PyTorch (ideally on GPU but
  - PettingZoo (pip install pettingzoo)
  - wandb (pip install wandb)
  - pygame (pip install pygame)
+ - imageio (pip install imageio)
 
 
 The folders here are
