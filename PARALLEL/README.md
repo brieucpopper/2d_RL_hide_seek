@@ -6,7 +6,7 @@ Or to generate a GIF :
 
 ```python watch_play_and_stats.py```
 
-to watch the poli
+to watch the policies play out together
 
 
 ## parallel.py defines the PettingZoo parallel env
