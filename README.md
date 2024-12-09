@@ -8,6 +8,7 @@ This GIF is an example of our agents playing the game
 The easiest way to get our code running is to have a PyTorch (ideally on GPU but not necessary) python 3.10 conda env, then pip install
  - PettingZoo (pip install pettingzoo)
  - wandb (pip install wandb)
+ - pygame (pip install pygame)
 
 
 The folders here are
